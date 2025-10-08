@@ -187,7 +187,7 @@ class ExternalOIDCAuth(httpx.Auth):
         Args:
             issuer_url: OIDC issuer URL (e.g., "https://keycloak.example.com/realms/myrealm")
             client_id: Static OAuth client ID
-            client_secret: Static OAuth client secret (optional for public OIDC clients not requiring any such)
+            client_secret: Static OAuth client secret (optional for public OIDC clients that don't require any such)
             scopes: OAuth scopes to request (default: ["openid"]). Can be a
             space-separated string or a list of strings.
             token_storage_cache_dir: Directory for token storage (cache)

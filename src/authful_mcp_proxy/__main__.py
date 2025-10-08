@@ -64,7 +64,7 @@ def cli():
     )
     parser.add_argument(
         "--oidc-client-secret",
-        help="OAuth client secret (can also be set via OIDC_CLIENT_SECRET env var, optional for public OIDC clients not requiring any such)",
+        help="OAuth client secret (can also be set via OIDC_CLIENT_SECRET env var, optional for public OIDC clients that don't require any such)",
     )
     parser.add_argument(
         "--oidc-scopes",
