@@ -1,0 +1,17 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MCP Backend",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/examples/token_validating_mcp_backend/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/examples/token_validating_mcp_backend/mcp_backend.py",
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}
