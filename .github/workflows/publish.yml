@@ -1,0 +1,41 @@
+name: Publish to PyPI
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  pypi-publish:
+    name: Upload to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # For PyPI's trusted publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: "Install uv"
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build
+        run: uv build
+
+      - name: Check version format
+        run: |
+          # Extract version from the built package
+          VERSION=$(ls dist/*.whl | head -n1 | sed -E 's/.*-([0-9].*)-.*/\1/')
+          echo "Package version: $VERSION"
+
+          # Check if version contains dev/post markers (development version)
+          if [[ "$VERSION" =~ (dev|post.*dev) ]]; then
+            echo "❌ ERROR: Cannot publish development version: $VERSION"
+            echo "Please create a proper Git tag first (e.g., 'git tag v0.1.0')"
+            exit 1
+          fi
+
+          echo "✅ Version $VERSION is valid for publishing"
+
+      - name: Publish to PyPI
+        run: uv publish -v dist/*
