@@ -16,7 +16,6 @@ A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server 
     - [Enable automatic execution on git commit](#enable-automatic-execution-on-git-commit)
     - [Manual execution](#manual-execution)
   - [Test](#test)
-    - [Quick start](#quick-start)
   - [Package](#package)
 - [Usage](#usage)
   - [Connect MCP client](#connect-mcp-client)
@@ -182,25 +181,40 @@ uv run ty check             # Type checking
 
 This project includes a comprehensive test suite to ensure reliability and maintainability of the MCP proxy server functionality. They include:
 
-- **Unit tests**: Test individual components (schema provider, query translator) in isolation
-- **Integration tests**: Test MCP tools and resources with realistic data flows
-- **Coverage requirement**: Minimum 85% code coverage
-
-### Quick start
+- **Unit tests**: Test configuration, OIDC authentication, and main application components
+- **Integration tests**: Test end-to-end OIDC flows with realistic scenarios
+- **Coverage tracking**: Code coverage reports generated automatically (see `htmlcov/` directory)
 
 ```bash
 # Activate virtual environment
 .venv\Scripts\activate  # Windows
 source ./.venv/bin/activate  # Linux/macOS
 
+# Install project dependencies (includes both dev and test groups)
+uv sync
+
 # Run all tests
 uv run pytest
 
-# Run tests with coverage report
-uv run pytest --cov=src/authful_mcp_proxy --cov-report=html
-```
+# Run with verbose output
+uv run pytest -v
 
-For detailed information wrt testing, see [tests/README.md](tests/README.md).
+# Run with coverage report output to terminal and enforce minimum coverage
+uv run pytest --cov=src/authful_mcp_proxy --cov-report=term-missing --cov-fail-under=65
+
+# Run specific test file
+uv run pytest tests/test_main.py
+
+# Run specific test class
+uv run pytest tests/test_main.py::TestCLI
+
+# Run specific test
+uv run pytest tests/test_main.py::TestCLI::test_cli_with_minimal_args
+
+# Generate HTML coverage report
+uv run pytest --cov-report=html
+# Open htmlcov/index.html to view detailed coverage
+```
 
 ## Package
 

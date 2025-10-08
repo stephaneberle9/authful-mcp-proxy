@@ -15,6 +15,11 @@ wheels/
 # Log files
 *.log
 
+# Coverage reports
+.coverage
+htmlcov/
+.pytest_cache/
+
 # MCPB files
 *.mcpb
 
