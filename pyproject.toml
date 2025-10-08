@@ -1,7 +1,7 @@
 [project]
 name = "authful-mcp-proxy"
 dynamic = ["version"]
-description = "A Model Context Protocol (MCP) proxy server with full OpenID Connect (OIDC) authentication support for bridging protected remote MCP servers using HTTP transport to local stdio transport for use with MCP clients like Claude Desktop"
+description = "A Model Context Protocol (MCP) proxy server that performs OIDC authentication to obtain access tokens for remote MCP servers protected by token validation, and bridges HTTP transport to local stdio for MCP clients like Claude Desktop."
 readme = "README.md"
 authors = [
     { name = "Stephan Eberle", email = "stephaneberle9@gmail.com" }
