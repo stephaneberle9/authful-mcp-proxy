@@ -15,7 +15,7 @@ class OIDCConfig:
     Attributes:
         issuer_url: OIDC issuer URL (e.g., https://keycloak.example.com/realms/myrealm)
         client_id: OAuth client identifier
-        client_secret: OAuth client secret (optional for public OIDC clients not requiring any such)
+        client_secret: OAuth client secret (optional for public OIDC clients that don't require any such)
         scopes: Space-separated OAuth scopes (e.g., "openid profile email")
         redirect_url: Localhost callback URL for OAuth redirect (e.g., http://localhost:8080/auth/callback)
     """
