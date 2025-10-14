@@ -110,22 +110,22 @@ jobs:
       - name: Create DMG (optional)
         run: |
           # Install create-dmg if you want a .dmg file
-          # brew install create-dmg
-          # create-dmg --volname "Authful MCP Proxy" dist/authful-mcp-proxy.dmg dist/authful-mcp-proxy
-          echo "Skipping DMG creation"
+          brew install create-dmg
+          create-dmg --volname "Authful MCP Proxy" dist/authful-mcp-proxy.dmg dist/authful-mcp-proxy
+          # echo "Skipping DMG creation"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: authful-mcp-proxy-macos
-          path: dist/authful-mcp-proxy
+          path: dist/authful-mcp-proxy.dmg
           retention-days: 90
 
       - name: Create release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/authful-mcp-proxy
+          files: dist/authful-mcp-proxy.dmg
           draft: false
           prerelease: false
         env:
