@@ -5,6 +5,7 @@ Quick reference for using the pre-built Windows executable of authful-mcp-proxy.
 ## Download
 
 Get the latest Windows executable from:
+
 - GitHub Releases page (if available)
 - Build it yourself following [BUILD_WINDOWS.md](BUILD_WINDOWS.md)
 
@@ -13,11 +14,13 @@ Get the latest Windows executable from:
 ### 1. Place the Executable
 
 Copy `authful-mcp-proxy.exe` to a permanent location, for example:
+
 ```
 C:\Program Files\authful-mcp-proxy\authful-mcp-proxy.exe
 ```
 
 Or a user directory:
+
 ```
 C:\Users\YourName\Tools\authful-mcp-proxy.exe
 ```
@@ -25,6 +28,7 @@ C:\Users\YourName\Tools\authful-mcp-proxy.exe
 ### 2. Configure Claude Desktop
 
 Open Claude Desktop settings:
+
 - Click **Settings** → **Developer** → **Edit Config**
 
 Add your server configuration:
@@ -34,19 +38,18 @@ Add your server configuration:
   "mcpServers": {
     "my-server": {
       "command": "C:\\Program Files\\authful-mcp-proxy\\authful-mcp-proxy.exe",
-      "args": [
-        "https://your-mcp-backend.com/mcp"
-      ],
+      "args": ["https://your-mcp-backend.com/mcp"],
       "env": {
         "OIDC_ISSUER_URL": "https://your-auth-server.com",
-        "OIDC_CLIENT_ID": "your-client-id"
-      }
-    }
-  }
+        "OIDC_CLIENT_ID": "your-client-id",
+      },
+    },
+  },
 }
 ```
 
 **Important:**
+
 - Use double backslashes (`\\`) in paths
 - Use the full absolute path to the executable
 - Configure your OIDC client with redirect URI: `http://localhost:8080/auth/callback`
@@ -58,6 +61,7 @@ Close and reopen Claude Desktop to load the new configuration.
 ### 4. First Run
 
 On first use:
+
 1. Claude Desktop will launch the proxy
 2. Your browser will open for authentication
 3. Sign in to your OIDC provider
@@ -65,6 +69,7 @@ On first use:
 5. Return to Claude Desktop
 
 Your credentials will be cached in:
+
 ```
 C:\Users\YourName\.fastmcp\oauth-mcp-client-cache\
 ```
@@ -109,15 +114,15 @@ authful-mcp-proxy.exe --debug https://mcp.example.com/mcp
 
 Set these in your system or in the `env` block of your Claude Desktop config:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `MCP_BACKEND_URL` | Yes* | - | Backend MCP server URL |
-| `OIDC_ISSUER_URL` | Yes | - | OIDC issuer URL |
-| `OIDC_CLIENT_ID` | Yes | - | OAuth client ID |
-| `OIDC_CLIENT_SECRET` | No | - | OAuth client secret |
-| `OIDC_SCOPES` | No | `openid profile email` | Space-separated scopes |
-| `OIDC_REDIRECT_URL` | No | `http://localhost:8080/auth/callback` | OAuth redirect URL |
-| `MCP_PROXY_DEBUG` | No | `0` | Enable debug logging (1/true/yes/on) |
+| Variable             | Required | Default                               | Description                          |
+| -------------------- | -------- | ------------------------------------- | ------------------------------------ |
+| `MCP_BACKEND_URL`    | Yes\*    | -                                     | Backend MCP server URL               |
+| `OIDC_ISSUER_URL`    | Yes      | -                                     | OIDC issuer URL                      |
+| `OIDC_CLIENT_ID`     | Yes      | -                                     | OAuth client ID                      |
+| `OIDC_CLIENT_SECRET` | No       | -                                     | OAuth client secret                  |
+| `OIDC_SCOPES`        | No       | `openid profile email`                | Space-separated scopes               |
+| `OIDC_REDIRECT_URL`  | No       | `http://localhost:8080/auth/callback` | OAuth redirect URL                   |
+| `MCP_PROXY_DEBUG`    | No       | `0`                                   | Enable debug logging (1/true/yes/on) |
 
 \* Can be provided as first command-line argument instead
 
@@ -143,10 +148,12 @@ Options:
 ### "Windows protected your PC"
 
 Windows SmartScreen may block unsigned executables:
+
 1. Click **More info**
 2. Click **Run anyway**
 
 To avoid this permanently:
+
 - Code sign the executable (requires certificate)
 - Add to Windows Defender exclusions
 
@@ -204,11 +211,13 @@ Your cached credentials will be preserved.
 ### Credential Storage
 
 OAuth tokens are stored in:
+
 ```
 %USERPROFILE%\.fastmcp\oauth-mcp-client-cache\
 ```
 
 These files contain sensitive access tokens. Protect them:
+
 - Don't share these files
 - Don't commit them to version control
 - Use Windows file permissions to restrict access
@@ -216,6 +225,7 @@ These files contain sensitive access tokens. Protect them:
 ### HTTPS Required
 
 Always use HTTPS URLs for:
+
 - MCP backend servers
 - OIDC issuer URLs
 - OAuth redirect URLs (except localhost)
@@ -223,6 +233,7 @@ Always use HTTPS URLs for:
 ### Client Secrets
 
 If using a client secret:
+
 - Don't hardcode in config files that are shared
 - Use Windows environment variables
 - Consider using Windows Credential Manager
@@ -243,8 +254,8 @@ If using a client secret:
   "args": ["https://api.example.com/mcp"],
   "env": {
     "OIDC_ISSUER_URL": "https://keycloak.example.com/realms/myrealm",
-    "OIDC_CLIENT_ID": "mcp-client"
-  }
+    "OIDC_CLIENT_ID": "mcp-client",
+  },
 }
 ```
 
@@ -257,8 +268,8 @@ If using a client secret:
   "env": {
     "OIDC_ISSUER_URL": "https://login.microsoftonline.com/{tenant-id}/v2.0",
     "OIDC_CLIENT_ID": "your-app-id",
-    "OIDC_SCOPES": "openid profile email api://your-api/.default"
-  }
+    "OIDC_SCOPES": "openid profile email api://your-api/.default",
+  },
 }
 ```
 
@@ -271,8 +282,8 @@ If using a client secret:
   "env": {
     "OIDC_ISSUER_URL": "https://your-domain.auth0.com",
     "OIDC_CLIENT_ID": "your-client-id",
-    "OIDC_SCOPES": "openid profile email offline_access"
-  }
+    "OIDC_SCOPES": "openid profile email offline_access",
+  },
 }
 ```
 
@@ -284,7 +295,7 @@ If using a client secret:
   "args": ["https://api.example.com/mcp"],
   "env": {
     "OIDC_ISSUER_URL": "https://your-domain.okta.com/oauth2/default",
-    "OIDC_CLIENT_ID": "your-client-id"
-  }
+    "OIDC_CLIENT_ID": "your-client-id",
+  },
 }
 ```

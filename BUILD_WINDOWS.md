@@ -11,12 +11,14 @@ This guide explains how to create a standalone Windows executable (.exe) for aut
 ## Quick Start (Windows)
 
 1. **Clone the repository**:
+
    ```cmd
    git clone https://github.com/yourusername/authful-mcp-proxy.git
    cd authful-mcp-proxy
    ```
 
 2. **Set up the virtual environment**:
+
    ```cmd
    python -m pip install uv
    uv venv
@@ -25,6 +27,7 @@ This guide explains how to create a standalone Windows executable (.exe) for aut
    ```
 
 3. **Build the executable**:
+
    ```cmd
    build_windows.bat
    ```
@@ -37,22 +40,26 @@ This guide explains how to create a standalone Windows executable (.exe) for aut
 If you prefer to build manually or the automated script doesn't work:
 
 1. **Activate virtual environment**:
+
    ```cmd
    bin\activate.bat
    ```
 
 2. **Install PyInstaller**:
+
    ```cmd
    pip install pyinstaller
    ```
 
 3. **Clean previous builds** (optional):
+
    ```cmd
    rmdir /s /q build
    rmdir /s /q dist
    ```
 
 4. **Build the executable**:
+
    ```cmd
    pyinstaller --clean authful-mcp-proxy.spec
    ```
@@ -73,19 +80,18 @@ Once built, you can use the executable directly in your Claude Desktop configura
   "mcpServers": {
     "my-protected-server": {
       "command": "C:\\path\\to\\authful-mcp-proxy.exe",
-      "args": [
-        "https://mcp-backend.company.com/mcp"
-      ],
+      "args": ["https://mcp-backend.company.com/mcp"],
       "env": {
         "OIDC_ISSUER_URL": "https://auth.company.com",
-        "OIDC_CLIENT_ID": "your-client-id"
-      }
-    }
-  }
+        "OIDC_CLIENT_ID": "your-client-id",
+      },
+    },
+  },
 }
 ```
 
 **Important Notes:**
+
 - Use double backslashes (`\\`) in Windows paths
 - Use the full absolute path to the .exe file
 - Make sure the OIDC client has `http://localhost:8080/auth/callback` as an allowed redirect URI
@@ -128,6 +134,7 @@ To add a custom icon to your executable:
 The executable is ~8-10 MB. To reduce size:
 
 1. **Remove UPX compression** (if causing issues):
+
    ```python
    upx=False,  # In the spec file
    ```
@@ -149,6 +156,7 @@ The executable is ~8-10 MB. To reduce size:
 ### Build Fails with "Module Not Found"
 
 Add the missing module to `hiddenimports` in the spec file:
+
 ```python
 hiddenimports=[
     'your_missing_module',
@@ -165,6 +173,7 @@ Alternatively, install the Microsoft Visual C++ Redistributable on the target ma
 ### "Access Denied" or Antivirus Warnings
 
 Some antivirus software flags PyInstaller executables as suspicious. To fix:
+
 1. Add an exception in your antivirus for the executable
 2. Code sign the executable (requires a code signing certificate)
 3. Upload the executable to VirusTotal and wait for AV vendors to whitelist it
@@ -178,6 +187,7 @@ Some antivirus software flags PyInstaller executables as suspicious. To fix:
 ### Testing Without Windows
 
 You cannot cross-compile Windows executables on macOS/Linux with PyInstaller. You need:
+
 - A Windows machine or VM
 - Wine (on Linux, experimental)
 - Windows in Docker (limited support)
@@ -191,6 +201,7 @@ The current configuration creates a single-file executable (`--onefile` mode) th
 ### Folder Distribution
 
 If you prefer faster startup time, modify the spec file to use folder mode:
+
 ```python
 # Comment out or remove the '--onefile' behavior by using separate EXE/COLLECT
 ```
@@ -208,6 +219,7 @@ Then distribute the entire `dist\authful-mcp-proxy\` folder.
 ### Debug Build
 
 To create a debug build with console output:
+
 ```cmd
 pyinstaller --clean --debug all authful-mcp-proxy.spec
 ```
@@ -215,6 +227,7 @@ pyinstaller --clean --debug all authful-mcp-proxy.spec
 ### Custom Python Environment
 
 If you need a specific Python version:
+
 ```cmd
 C:\Python310\python.exe -m venv venv
 venv\Scripts\activate

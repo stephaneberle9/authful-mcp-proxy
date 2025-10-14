@@ -5,7 +5,9 @@ This document summarizes the PyInstaller setup for building Windows executables 
 ## Files Created
 
 ### 1. **authful-mcp-proxy.spec**
+
 PyInstaller specification file that defines:
+
 - Entry point: `run_proxy.py`
 - All dependencies (fastmcp, httpx, httpcore, h11, certifi, etc.)
 - Package metadata for version detection
@@ -13,13 +15,17 @@ PyInstaller specification file that defines:
 - Exclusions to reduce executable size
 
 ### 2. **run_proxy.py**
+
 Simplified entry point script that:
+
 - Handles both frozen (PyInstaller) and normal Python execution
 - Properly configures sys.path for imports
 - Calls the main() function from authful_mcp_proxy
 
 ### 3. **build_windows.bat**
+
 Windows batch script that:
+
 - Activates the virtual environment
 - Installs PyInstaller if needed
 - Cleans previous build artifacts
@@ -27,12 +33,16 @@ Windows batch script that:
 - Reports build status and usage instructions
 
 ### 4. **build_windows.sh**
+
 Unix/macOS shell script (for cross-platform development):
+
 - Same functionality as the .bat file
 - Useful for developers on macOS/Linux
 
 ### 5. **BUILD_WINDOWS.md**
+
 Comprehensive documentation covering:
+
 - Prerequisites and installation
 - Quick start and manual build instructions
 - Usage with Claude Desktop and other MCP clients
@@ -41,7 +51,9 @@ Comprehensive documentation covering:
 - Distribution and security considerations
 
 ### 6. **WINDOWS_USAGE.md**
+
 User-friendly guide for end-users:
+
 - Download and setup instructions
 - Claude Desktop configuration examples
 - Command-line usage
@@ -101,6 +113,7 @@ Since PyInstaller cannot cross-compile, use one of these methods:
 ## Key Technical Details
 
 ### Dependencies Included
+
 - **fastmcp**: MCP server framework
 - **httpx**: HTTP client for backend communication
 - **httpcore**: Low-level HTTP transport
@@ -112,19 +125,24 @@ Since PyInstaller cannot cross-compile, use one of these methods:
 - All Python standard library modules needed
 
 ### Package Metadata
+
 The spec file includes metadata for:
+
 - `fastmcp` - required for version detection
 - `authful-mcp-proxy` - application version
 - `httpx` - HTTP client metadata
 - `mcp` - MCP protocol metadata
 
 ### Entry Point Strategy
+
 Instead of using `src/authful_mcp_proxy/__main__.py` directly, we use `run_proxy.py`:
+
 - Avoids issues with relative imports in frozen executables
 - Properly handles `sys._MEIPASS` for PyInstaller temp directory
 - Ensures the source path is correctly configured
 
 ### Executable Configuration
+
 - **Console Mode**: `console=True` is required for MCP stdio communication
 - **UPX Compression**: Enabled to reduce size (can be disabled if causing issues)
 - **Single File**: Creates a single .exe with all dependencies bundled
@@ -146,14 +164,17 @@ Instead of using `src/authful_mcp_proxy/__main__.py` directly, we use `run_proxy
 ## Distribution
 
 ### Files to Distribute
+
 - **Single file**: `dist/authful-mcp-proxy.exe`
 - **Documentation**: README.md, WINDOWS_USAGE.md
 
 ### Size
+
 - Approximately 25 MB for the macOS build
 - Windows build will be similar (20-30 MB)
 
 ### Requirements for End Users
+
 - Windows 10 or later (or macOS for the Mac build)
 - No Python installation required
 - Network access for OIDC authentication
@@ -162,23 +183,31 @@ Instead of using `src/authful_mcp_proxy/__main__.py` directly, we use `run_proxy
 ## Troubleshooting Build Issues
 
 ### Missing Modules
+
 If you get `ModuleNotFoundError` when running the executable:
+
 1. Add the module to `hiddenimports` in the spec file
 2. Rebuild with `pyinstaller --clean authful-mcp-proxy.spec`
 
 ### Metadata Errors
+
 If you get `PackageNotFoundError` for package metadata:
+
 1. Add `copy_metadata('package-name')` to the spec file
 2. Rebuild
 
 ### Import Errors
+
 If relative imports fail:
+
 1. Check that `run_proxy.py` is the entry point
 2. Verify `pathex` includes the src directory
 3. Ensure all modules are in `hiddenimports`
 
 ### Large Executable Size
+
 To reduce size:
+
 1. Add more packages to `excludes` list
 2. Disable UPX: set `upx=False`
 3. Use folder mode instead of onefile (modify spec)
@@ -186,6 +215,7 @@ To reduce size:
 ## Notes for Windows Build
 
 When building on actual Windows:
+
 - Replace `.venv/bin/activate` with `.venv\Scripts\activate.bat`
 - Use `pyinstaller` instead of `./build_windows.sh`
 - The output will be `dist\authful-mcp-proxy.exe`
@@ -199,6 +229,7 @@ When building on actual Windows:
 A complete GitHub Actions workflow has been created at [`.github/workflows/build-executable.yml`](.github/workflows/build-executable.yml).
 
 This workflow:
+
 - ✅ Builds executables for **Windows**, **macOS**, and **Linux**
 - ✅ Runs on every push and pull request
 - ✅ Tests the executable with `--help` command
@@ -241,6 +272,7 @@ For custom CI/CD systems, here's a minimal example:
 ## Version Management
 
 The executable includes version information from git tags:
+
 - Version is automatically detected from `importlib.metadata`
 - Development versions show git commit hash
 - Release versions show semantic version (e.g., "1.0.0")
@@ -256,6 +288,7 @@ The executable includes version information from git tags:
 ## Support
 
 For issues or questions:
+
 - Check [BUILD_WINDOWS.md](BUILD_WINDOWS.md) for detailed instructions
 - Review [WINDOWS_USAGE.md](WINDOWS_USAGE.md) for user guidance
 - Check the main [README.md](README.md) for general documentation
