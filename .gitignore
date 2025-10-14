@@ -1,27 +1,10 @@
-.env
-mcp*.json
-
-# Python-generated files
-__pycache__/
-*.py[oc]
+/lib
+/bin
+# PyInstaller build artifacts
+*.spec
+!authful-mcp-proxy.spec
+__main__.spec
 build/
 dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv/
-
-# Log files
-*.log
-
-# Coverage reports
-.coverage
-htmlcov/
-.pytest_cache/
-
-# MCPB files
-*.mcpb
-
-# VSCode settings
-.vscode/PythonImportHelper-v2-Completion.json
+*.pyc
+*.pyo
