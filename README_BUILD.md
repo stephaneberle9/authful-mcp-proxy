@@ -32,12 +32,13 @@ Windows batch script that:
 - Builds the executable
 - Reports build status and usage instructions
 
-### 4. **build_windows.sh**
+### 4. **build_executable.sh**
 
-Unix/macOS shell script (for cross-platform development):
+Unix/macOS/Linux shell script that builds for the host platform:
 
 - Same functionality as the .bat file
-- Useful for developers on macOS/Linux
+- Builds native executables for macOS/Linux
+- Useful for developers on Unix-like systems
 
 ### 5. **BUILD_WINDOWS.md**
 
@@ -95,10 +96,10 @@ source .venv/bin/activate
 uv sync
 uv pip install pyinstaller
 
-# 2. Build the executable (creates macOS/Linux binary, not Windows .exe)
-./build_windows.sh
+# 2. Build the executable (creates native macOS/Linux binary)
+./build_executable.sh
 
-# Output: dist/authful-mcp-proxy (macOS/Linux executable for testing only)
+# Output: dist/authful-mcp-proxy (native macOS/Linux executable)
 ```
 
 #### To Build Actual Windows .exe from macOS/Linux
@@ -217,7 +218,7 @@ To reduce size:
 When building on actual Windows:
 
 - Replace `.venv/bin/activate` with `.venv\Scripts\activate.bat`
-- Use `pyinstaller` instead of `./build_windows.sh`
+- Use `build_windows.bat` instead of `./build_executable.sh`
 - The output will be `dist\authful-mcp-proxy.exe`
 - Windows Defender may flag the executable initially
 - Consider code signing for production distribution

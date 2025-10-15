@@ -1,16 +1,16 @@
 #!/bin/bash
-# Build script for creating Windows executable with PyInstaller
+# Build script for creating native executable with PyInstaller
 #
 # This script:
 # 1. Activates the virtual environment
 # 2. Installs PyInstaller if needed
-# 3. Builds the Windows executable using the spec file
+# 3. Builds the executable for the host platform using the spec file
 # 4. Reports the output location
 
 set -e
 
 echo "========================================"
-echo "Building authful-mcp-proxy for Windows"
+echo "Building authful-mcp-proxy executable"
 echo "========================================"
 echo
 
