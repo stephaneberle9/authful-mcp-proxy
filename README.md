@@ -323,9 +323,9 @@ uvx authful-mcp-proxy \
 
 ### Where Are Credentials Stored?
 
-Credentials are cached in `~/.fastmcp/oauth-mcp-client-cache/` with filenames based on the OIDC issuer URL:
+Credentials are cached in `~/.mcp/authful_mcp_proxy/tokens/` with filenames based on the OIDC issuer URL:
 ```
-~/.fastmcp/oauth-mcp-client-cache/
+~/.mcp/authful_mcp_proxy/tokens/
   └── https_auth_example_com_tokens.json
 ```
 
@@ -335,10 +335,10 @@ To force re-authentication (e.g., to switch accounts or clear expired tokens):
 
 ```bash
 # Linux/macOS
-rm -rf ~/.fastmcp/oauth-mcp-client-cache/
+rm -rf ~/.mcp/authful_mcp_proxy/tokens/
 
 # Windows
-rmdir /s %USERPROFILE%\.fastmcp\oauth-mcp-client-cache
+rmdir /s %USERPROFILE%\.mcp\authful_mcp_proxy\tokens
 ```
 
 The next time you connect, you'll be prompted to authenticate again.

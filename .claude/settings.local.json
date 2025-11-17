@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": ["Bash(pip show:*)", "Bash(python:*)", "Bash(uv run ty:*)"],
+    "deny": [],
+    "ask": []
+  }
+}

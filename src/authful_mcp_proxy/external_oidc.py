@@ -22,20 +22,22 @@ import asyncio
 import secrets
 import time
 import webbrowser
-from asyncio import Future
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlencode, urlparse
 
 import anyio
 import httpx
-from fastmcp.client.auth.oauth import FileTokenStorage
-from fastmcp.client.oauth_callback import create_oauth_callback_server
+from fastmcp.client.auth.oauth import TokenStorageAdapter
+from fastmcp.client.oauth_callback import (
+    OAuthCallbackResult,
+    create_oauth_callback_server,
+)
 from fastmcp.server.auth.oidc_proxy import OIDCConfiguration
 from fastmcp.utilities.logging import get_logger
-from mcp.client.auth import PKCEParameters
+from key_value.aio.stores.disk import DiskStore
+from mcp.client.auth import PKCEParameters, TokenStorage
 from mcp.shared.auth import OAuthToken
 from pydantic import AnyHttpUrl
 from uvicorn.server import Server
@@ -57,7 +59,7 @@ class OIDCContext:
     client_secret: str | None
     scopes: list[str]
     redirect_uri: str
-    storage: FileTokenStorage
+    storage: TokenStorage
 
     # Discovered metadata
     oidc_config: OIDCConfiguration
@@ -190,7 +192,7 @@ class ExternalOIDCAuth(httpx.Auth):
             client_secret: Static OAuth client secret (optional for public OIDC clients that don't require any such)
             scopes: OAuth scopes to request (default: ["openid"]). Can be a
             space-separated string or a list of strings.
-            token_storage_cache_dir: Directory for token storage (cache)
+            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp/authful_mcp_proxy/tokens/)
             redirect_url: Localhost URL for OAuth redirect (default: http://localhost:8080/auth/callback)
         """
         # Validate required parameters
@@ -214,10 +216,15 @@ class ExternalOIDCAuth(httpx.Auth):
         # Setup redirect port and redirect URI
         redirect_uri = redirect_url or "http://localhost:8080/auth/callback"
 
-        # Initialize token storage - reuse FileTokenStorage
-        storage = FileTokenStorage(
-            server_url=issuer_url, cache_dir=token_storage_cache_dir
+        # Initialize token storage using DiskStore and TokenStorageAdapter
+        # DiskStore provides persistent disk-based storage for OAuth tokens
+        # Use a default cache directory if none is provided
+        cache_dir = (
+            token_storage_cache_dir
+            or Path.home() / ".mcp" / "authful_mcp_proxy" / "tokens"
         )
+        disk_store = DiskStore(directory=cache_dir)
+        storage = TokenStorageAdapter(async_key_value=disk_store, server_url=issuer_url)
 
         # Fetch OIDC configuration
         config_url = f"{issuer_url.rstrip('/')}/.well-known/openid-configuration"
@@ -259,14 +266,16 @@ class ExternalOIDCAuth(httpx.Auth):
 
     async def _run_callback_server(self) -> tuple[str, str]:
         """Handle OAuth callback and return (auth_code, state)."""
-        # Create a future to capture the OAuth response
-        response_future: Future[Any] = asyncio.get_running_loop().create_future()
+        # Create result container and event for async coordination
+        result_container = OAuthCallbackResult()
+        result_ready = anyio.Event()
 
-        # Create server with the future
+        # Create server with result container and event
         server: Server = create_oauth_callback_server(
             port=self.context.get_redirect_port(),
             server_url=self.context.issuer_url,
-            response_future=response_future,
+            result_container=result_container,
+            result_ready=result_ready,
         )
 
         # Run server until response is received with timeout logic
@@ -278,8 +287,20 @@ class ExternalOIDCAuth(httpx.Auth):
 
             try:
                 with anyio.fail_after(BROWSER_LOGIN_TIMEOUT_SECONDS):
-                    auth_code, state = await response_future
-                    return auth_code, state
+                    await result_ready.wait()
+
+                    # Check for errors
+                    if result_container.error:
+                        raise result_container.error
+
+                    # Validate that we received code and state
+                    if not result_container.code or not result_container.state:
+                        raise RuntimeError(
+                            "OAuth callback did not return code or state"
+                        )
+
+                    # Return code and state
+                    return result_container.code, result_container.state
             except TimeoutError:
                 raise TimeoutError(
                     f"OIDC Auth callback timed out after {BROWSER_LOGIN_TIMEOUT_SECONDS} seconds"
