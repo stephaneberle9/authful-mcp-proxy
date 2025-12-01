@@ -105,8 +105,13 @@ class OIDCContext:
         return token_data
 
     def get_token_refresh_data(self) -> dict[str, str]:
-        """Build token refresh request data."""
-        token_data = {
+        """Build token refresh request data.
+
+        Note: Callers should check can_refresh_token() before calling this method.
+        """
+        if not self.current_tokens or not self.current_tokens.refresh_token:
+            raise RuntimeError("No refresh token available")
+        token_data: dict[str, str] = {
             "grant_type": "refresh_token",
             "refresh_token": self.current_tokens.refresh_token,
             "client_id": self.client_id,
@@ -115,10 +120,11 @@ class OIDCContext:
             token_data["client_secret"] = self.client_secret
         return token_data
 
-    def update_token_expiry(self, token: OAuthToken) -> None:
-        """Update token expiry time."""
-        if token.expires_in:
-            self.token_expiry_time = time.time() + token.expires_in
+    def set_tokens(self, tokens: OAuthToken | None) -> None:
+        """Set current tokens and update expiry time."""
+        self.current_tokens = tokens
+        if tokens and tokens.expires_in:
+            self.token_expiry_time = time.time() + tokens.expires_in
         else:
             self.token_expiry_time = None
 
@@ -135,6 +141,16 @@ class OIDCContext:
     def can_refresh_token(self) -> bool:
         """Check if token can be refreshed."""
         return bool(self.current_tokens and self.current_tokens.refresh_token)
+
+    def get_access_token(self) -> str:
+        """Get the current access token.
+
+        Raises:
+            RuntimeError: If no valid access token is available.
+        """
+        if not self.current_tokens or not self.current_tokens.access_token:
+            raise RuntimeError("No access token available")
+        return self.current_tokens.access_token
 
     def clear_tokens(self) -> None:
         """Clear current tokens."""
@@ -258,9 +274,7 @@ class ExternalOIDCAuth(httpx.Auth):
         if self._initialized:
             return
 
-        self.context.current_tokens = await self.context.storage.get_tokens()
-        if self.context.current_tokens:
-            self.context.update_token_expiry(self.context.current_tokens)
+        self.context.set_tokens(await self.context.storage.get_tokens())
         self._initialized = True
         logger.debug("OIDC Auth client initialized")
 
@@ -357,8 +371,7 @@ class ExternalOIDCAuth(httpx.Auth):
             # Parse and store tokens
             tokens = OAuthToken.model_validate(token_response)
             await self.context.storage.set_tokens(tokens)
-            self.context.current_tokens = tokens
-            self.context.update_token_expiry(tokens)
+            self.context.set_tokens(tokens)
 
             logger.info("OIDC Auth flow completed successfully")
             return tokens
@@ -383,8 +396,7 @@ class ExternalOIDCAuth(httpx.Auth):
             # Parse and store new tokens
             tokens = OAuthToken.model_validate(token_response)
             await self.context.storage.set_tokens(tokens)
-            self.context.current_tokens = tokens
-            self.context.update_token_expiry(tokens)
+            self.context.set_tokens(tokens)
 
             logger.debug("OIDC Auth tokens refreshed")
             return tokens
@@ -400,7 +412,7 @@ class ExternalOIDCAuth(httpx.Auth):
 
         # If token is valid, return it
         if self.context.is_token_valid():
-            return self.context.current_tokens.access_token
+            return self.context.get_access_token()
 
         # Token expired or missing - refresh or re-auth
         return await self._renew_token()
@@ -418,7 +430,7 @@ class ExternalOIDCAuth(httpx.Auth):
             logger.debug("No refresh token available, performing full auth flow")
             await self._perform_auth_flow()
 
-        return self.context.current_tokens.access_token
+        return self.context.get_access_token()
 
     async def async_auth_flow(
         self, request: httpx.Request

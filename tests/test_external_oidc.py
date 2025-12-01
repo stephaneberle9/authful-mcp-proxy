@@ -191,8 +191,8 @@ class TestOIDCContext:
 
         assert "client_secret" not in data
 
-    def test_update_token_expiry_with_expires_in(self):
-        """Test updating token expiry time when expires_in is provided."""
+    def test_set_tokens_with_expires_in(self):
+        """Test setting tokens updates expiry time when expires_in is provided."""
         context = OIDCContext(
             issuer_url="https://auth.example.com",
             client_id="test-client",
@@ -206,13 +206,14 @@ class TestOIDCContext:
         mock_token = Mock()
         mock_token.expires_in = 3600  # 1 hour
 
-        context.update_token_expiry(mock_token)
+        context.set_tokens(mock_token)
 
+        assert context.current_tokens is mock_token
         assert context.token_expiry_time is not None
         assert context.token_expiry_time > 0
 
-    def test_update_token_expiry_without_expires_in(self):
-        """Test updating token expiry when expires_in is not provided."""
+    def test_set_tokens_without_expires_in(self):
+        """Test setting tokens when expires_in is not provided."""
         context = OIDCContext(
             issuer_url="https://auth.example.com",
             client_id="test-client",
@@ -226,8 +227,9 @@ class TestOIDCContext:
         mock_token = Mock()
         mock_token.expires_in = None
 
-        context.update_token_expiry(mock_token)
+        context.set_tokens(mock_token)
 
+        assert context.current_tokens is mock_token
         assert context.token_expiry_time is None
 
     def test_is_token_valid_with_valid_token(self):
@@ -245,8 +247,7 @@ class TestOIDCContext:
         mock_token = Mock()
         mock_token.access_token = "valid-token"
         mock_token.expires_in = 3600
-        context.current_tokens = mock_token
-        context.update_token_expiry(mock_token)
+        context.set_tokens(mock_token)
 
         assert context.is_token_valid() is True
 
