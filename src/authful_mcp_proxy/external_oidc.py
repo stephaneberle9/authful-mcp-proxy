@@ -76,6 +76,11 @@ class OIDCContext:
         parsed = urlparse(self.redirect_uri)
         return parsed.port or 80
 
+    def get_redirect_path(self) -> str:
+        """Extract the path from the redirect URI."""
+        parsed = urlparse(self.redirect_uri)
+        return parsed.path or "/callback"
+
     def get_authorization_url(self, state: str, pkce: PKCEParameters) -> str:
         """Build the authorization URL with PKCE parameters."""
         auth_params = {
@@ -287,6 +292,7 @@ class ExternalOIDCAuth(httpx.Auth):
         # Create server with result container and event
         server: Server = create_oauth_callback_server(
             port=self.context.get_redirect_port(),
+            callback_path=self.context.get_redirect_path(),
             server_url=self.context.issuer_url,
             result_container=result_container,
             result_ready=result_ready,
