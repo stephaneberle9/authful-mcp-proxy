@@ -38,6 +38,20 @@ class TestOIDCContext:
 
         assert context.get_redirect_port() == 80
 
+    def test_get_redirect_path_with_port(self):
+        """Test extracting path from redirect URI."""
+        context = OIDCContext(
+            issuer_url="https://auth.example.com",
+            client_id="test-client",
+            client_secret=None,
+            scopes=["openid"],
+            redirect_uri="http://localhost:80/auth/callback",
+            oidc_config=Mock(),
+            storage=Mock(),
+        )
+
+        assert context.get_redirect_path() == "/auth/callback"
+
     def test_is_token_valid_no_tokens(self):
         """Test is_token_valid returns False when no tokens."""
         context = OIDCContext(
