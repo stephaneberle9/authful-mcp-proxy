@@ -55,6 +55,20 @@ This MCP proxy fills that gap by handling authentication independently through d
 
 # Usage
 
+## Prerequisites
+
+This tool requires `uvx` (part of [uv](https://docs.astral.sh/uv/)). Install it via:
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+winget install --id=astral-sh.uv -e
+```
+
+See the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/) for more options.
+
 ## Quick Start
 
 The simplest way to use `authful-mcp-proxy` with MCP clients like Claude Desktop:
