@@ -73,9 +73,12 @@ extend-select = ["I", "UP"]
 "__init__.py" = ["F401", "I001", "RUF013"]
 # allow imports not at the top of the file
 "src/authful_mcp_proxy/__init__.py" = ["E402"]
+# PyInstaller entry point - exclude from type checking
+"run_proxy.py" = ["F401"]
 
 [tool.codespell]
-skip = "*.lock,pyproject.toml,*PythonImportHelper*"
+skip = "*.lock,pyproject.toml,*PythonImportHelper*,*.spec"
+ignore-words-list = "datas"
 
 [tool.pytest.ini_options]
 minversion = "7.0"

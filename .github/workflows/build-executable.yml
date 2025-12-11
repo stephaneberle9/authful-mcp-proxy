@@ -1,0 +1,189 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for proper versioning
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        run: python -m pip install uv
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: |
+          .venv\Scripts\activate
+          uv sync
+
+      - name: Install PyInstaller
+        run: |
+          .venv\Scripts\activate
+          uv pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          .venv\Scripts\activate
+          pyinstaller --clean authful-mcp-proxy.spec
+
+      - name: Test executable
+        run: |
+          dist\authful-mcp-proxy.exe --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: authful-mcp-proxy-windows
+          path: dist/authful-mcp-proxy.exe
+          retention-days: 90
+
+      - name: Create release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/authful-mcp-proxy.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    name: Build macOS Executable
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        run: python -m pip install uv
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          uv sync
+
+      - name: Install PyInstaller
+        run: |
+          source .venv/bin/activate
+          uv pip install pyinstaller
+
+      - name: Build macOS executable
+        run: |
+          source .venv/bin/activate
+          pyinstaller --clean authful-mcp-proxy.spec
+
+      - name: Test executable
+        run: |
+          ./dist/authful-mcp-proxy --help
+
+      - name: Create DMG (optional)
+        run: |
+          # Install create-dmg if you want a .dmg file
+          brew install create-dmg
+          create-dmg --volname "Authful MCP Proxy" dist/authful-mcp-proxy.dmg dist/authful-mcp-proxy
+          # echo "Skipping DMG creation"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: authful-mcp-proxy-macos
+          path: dist/authful-mcp-proxy.dmg
+          retention-days: 90
+
+      - name: Create release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/authful-mcp-proxy.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    name: Build Linux Executable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        run: python -m pip install uv
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          uv sync
+
+      - name: Install PyInstaller
+        run: |
+          source .venv/bin/activate
+          uv pip install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          source .venv/bin/activate
+          pyinstaller --clean authful-mcp-proxy.spec
+
+      - name: Test executable
+        run: |
+          ./dist/authful-mcp-proxy --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: authful-mcp-proxy-linux
+          path: dist/authful-mcp-proxy
+          retention-days: 90
+
+      - name: Create release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/authful-mcp-proxy
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
