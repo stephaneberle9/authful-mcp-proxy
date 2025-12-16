@@ -7,6 +7,7 @@ A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server 
 - [What Is This For?](#what-is-this-for)
   - [Technical Background](#technical-background)
 - [Usage](#usage)
+  - [Prerequisites](#prerequisites)
   - [Quick Start](#quick-start)
     - [First Run](#first-run)
   - [Configuration Options](#configuration-options)
