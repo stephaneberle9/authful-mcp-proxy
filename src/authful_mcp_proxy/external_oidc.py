@@ -22,20 +22,22 @@ import asyncio
 import secrets
 import time
 import webbrowser
-from asyncio import Future
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlencode, urlparse
 
 import anyio
 import httpx
-from fastmcp.client.auth.oauth import FileTokenStorage
-from fastmcp.client.oauth_callback import create_oauth_callback_server
+from fastmcp.client.auth.oauth import TokenStorageAdapter
+from fastmcp.client.oauth_callback import (
+    OAuthCallbackResult,
+    create_oauth_callback_server,
+)
 from fastmcp.server.auth.oidc_proxy import OIDCConfiguration
 from fastmcp.utilities.logging import get_logger
-from mcp.client.auth import PKCEParameters
+from key_value.aio.stores.disk import DiskStore
+from mcp.client.auth import PKCEParameters, TokenStorage
 from mcp.shared.auth import OAuthToken
 from pydantic import AnyHttpUrl
 from uvicorn.server import Server
@@ -57,7 +59,7 @@ class OIDCContext:
     client_secret: str | None
     scopes: list[str]
     redirect_uri: str
-    storage: FileTokenStorage
+    storage: TokenStorage
 
     # Discovered metadata
     oidc_config: OIDCConfiguration
@@ -73,6 +75,11 @@ class OIDCContext:
         """Extract the port number from the redirect URI."""
         parsed = urlparse(self.redirect_uri)
         return parsed.port or 80
+
+    def get_redirect_path(self) -> str:
+        """Extract the path from the redirect URI."""
+        parsed = urlparse(self.redirect_uri)
+        return parsed.path or "/callback"
 
     def get_authorization_url(self, state: str, pkce: PKCEParameters) -> str:
         """Build the authorization URL with PKCE parameters."""
@@ -103,8 +110,13 @@ class OIDCContext:
         return token_data
 
     def get_token_refresh_data(self) -> dict[str, str]:
-        """Build token refresh request data."""
-        token_data = {
+        """Build token refresh request data.
+
+        Note: Callers should check can_refresh_token() before calling this method.
+        """
+        if not self.current_tokens or not self.current_tokens.refresh_token:
+            raise RuntimeError("No refresh token available")
+        token_data: dict[str, str] = {
             "grant_type": "refresh_token",
             "refresh_token": self.current_tokens.refresh_token,
             "client_id": self.client_id,
@@ -113,10 +125,11 @@ class OIDCContext:
             token_data["client_secret"] = self.client_secret
         return token_data
 
-    def update_token_expiry(self, token: OAuthToken) -> None:
-        """Update token expiry time."""
-        if token.expires_in:
-            self.token_expiry_time = time.time() + token.expires_in
+    def set_tokens(self, tokens: OAuthToken | None) -> None:
+        """Set current tokens and update expiry time."""
+        self.current_tokens = tokens
+        if tokens and tokens.expires_in:
+            self.token_expiry_time = time.time() + tokens.expires_in
         else:
             self.token_expiry_time = None
 
@@ -133,6 +146,16 @@ class OIDCContext:
     def can_refresh_token(self) -> bool:
         """Check if token can be refreshed."""
         return bool(self.current_tokens and self.current_tokens.refresh_token)
+
+    def get_access_token(self) -> str:
+        """Get the current access token.
+
+        Raises:
+            RuntimeError: If no valid access token is available.
+        """
+        if not self.current_tokens or not self.current_tokens.access_token:
+            raise RuntimeError("No access token available")
+        return self.current_tokens.access_token
 
     def clear_tokens(self) -> None:
         """Clear current tokens."""
@@ -190,7 +213,7 @@ class ExternalOIDCAuth(httpx.Auth):
             client_secret: Static OAuth client secret (optional for public OIDC clients that don't require any such)
             scopes: OAuth scopes to request (default: ["openid"]). Can be a
             space-separated string or a list of strings.
-            token_storage_cache_dir: Directory for token storage (cache)
+            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp/authful_mcp_proxy/tokens/)
             redirect_url: Localhost URL for OAuth redirect (default: http://localhost:8080/auth/callback)
         """
         # Validate required parameters
@@ -214,10 +237,15 @@ class ExternalOIDCAuth(httpx.Auth):
         # Setup redirect port and redirect URI
         redirect_uri = redirect_url or "http://localhost:8080/auth/callback"
 
-        # Initialize token storage - reuse FileTokenStorage
-        storage = FileTokenStorage(
-            server_url=issuer_url, cache_dir=token_storage_cache_dir
+        # Initialize token storage using DiskStore and TokenStorageAdapter
+        # DiskStore provides persistent disk-based storage for OAuth tokens
+        # Use a default cache directory if none is provided
+        cache_dir = (
+            token_storage_cache_dir
+            or Path.home() / ".mcp" / "authful_mcp_proxy" / "tokens"
         )
+        disk_store = DiskStore(directory=cache_dir)
+        storage = TokenStorageAdapter(async_key_value=disk_store, server_url=issuer_url)
 
         # Fetch OIDC configuration
         config_url = f"{issuer_url.rstrip('/')}/.well-known/openid-configuration"
@@ -251,22 +279,23 @@ class ExternalOIDCAuth(httpx.Auth):
         if self._initialized:
             return
 
-        self.context.current_tokens = await self.context.storage.get_tokens()
-        if self.context.current_tokens:
-            self.context.update_token_expiry(self.context.current_tokens)
+        self.context.set_tokens(await self.context.storage.get_tokens())
         self._initialized = True
         logger.debug("OIDC Auth client initialized")
 
     async def _run_callback_server(self) -> tuple[str, str]:
         """Handle OAuth callback and return (auth_code, state)."""
-        # Create a future to capture the OAuth response
-        response_future: Future[Any] = asyncio.get_running_loop().create_future()
+        # Create result container and event for async coordination
+        result_container = OAuthCallbackResult()
+        result_ready = anyio.Event()
 
-        # Create server with the future
+        # Create server with result container and event
         server: Server = create_oauth_callback_server(
             port=self.context.get_redirect_port(),
+            callback_path=self.context.get_redirect_path(),
             server_url=self.context.issuer_url,
-            response_future=response_future,
+            result_container=result_container,
+            result_ready=result_ready,
         )
 
         # Run server until response is received with timeout logic
@@ -278,8 +307,20 @@ class ExternalOIDCAuth(httpx.Auth):
 
             try:
                 with anyio.fail_after(BROWSER_LOGIN_TIMEOUT_SECONDS):
-                    auth_code, state = await response_future
-                    return auth_code, state
+                    await result_ready.wait()
+
+                    # Check for errors
+                    if result_container.error:
+                        raise result_container.error
+
+                    # Validate that we received code and state
+                    if not result_container.code or not result_container.state:
+                        raise RuntimeError(
+                            "OAuth callback did not return code or state"
+                        )
+
+                    # Return code and state
+                    return result_container.code, result_container.state
             except TimeoutError:
                 raise TimeoutError(
                     f"OIDC Auth callback timed out after {BROWSER_LOGIN_TIMEOUT_SECONDS} seconds"
@@ -336,8 +377,7 @@ class ExternalOIDCAuth(httpx.Auth):
             # Parse and store tokens
             tokens = OAuthToken.model_validate(token_response)
             await self.context.storage.set_tokens(tokens)
-            self.context.current_tokens = tokens
-            self.context.update_token_expiry(tokens)
+            self.context.set_tokens(tokens)
 
             logger.info("OIDC Auth flow completed successfully")
             return tokens
@@ -362,8 +402,7 @@ class ExternalOIDCAuth(httpx.Auth):
             # Parse and store new tokens
             tokens = OAuthToken.model_validate(token_response)
             await self.context.storage.set_tokens(tokens)
-            self.context.current_tokens = tokens
-            self.context.update_token_expiry(tokens)
+            self.context.set_tokens(tokens)
 
             logger.debug("OIDC Auth tokens refreshed")
             return tokens
@@ -379,7 +418,7 @@ class ExternalOIDCAuth(httpx.Auth):
 
         # If token is valid, return it
         if self.context.is_token_valid():
-            return self.context.current_tokens.access_token
+            return self.context.get_access_token()
 
         # Token expired or missing - refresh or re-auth
         return await self._renew_token()
@@ -397,7 +436,7 @@ class ExternalOIDCAuth(httpx.Auth):
             logger.debug("No refresh token available, performing full auth flow")
             await self._perform_auth_flow()
 
-        return self.context.current_tokens.access_token
+        return self.context.get_access_token()
 
     async def async_auth_flow(
         self, request: httpx.Request
