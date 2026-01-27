@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for authful-mcp-proxy Windows executable.
+PyInstaller spec file for authful-mcp-proxy executable.
 
-This spec file creates a standalone executable for Windows that includes:
-- All Python dependencies (fastmcp, httpx, etc.)
+This spec file creates a standalone executable that includes:
+- All Python dependencies (fastmcp, httpx, key_value, diskcache, etc.)
 - Hidden imports for OIDC and async libraries
 - Proper console configuration for MCP stdio communication
 """
@@ -25,6 +25,15 @@ hiddenimports = [
     'authful_mcp_proxy.external_oidc',
     'authful_mcp_proxy.mcp_proxy',
     'fastmcp',
+    'key_value',
+    'key_value.aio',
+    'key_value.aio.stores',
+    'key_value.aio.stores.disk',
+    'diskcache',
+    'diskcache.core',
+    'diskcache.fanout',
+    'diskcache.persistent',
+    'pathvalidate',
     'httpx',
     'httpx._client',
     'httpx._config',
@@ -43,20 +52,26 @@ hiddenimports = [
     'importlib.metadata',
     'logging',
     'argparse',
+    'pickletools',
+    'sqlite3',
 ]
 
-# Collect all submodules from fastmcp (may have hidden dependencies)
+# Collect all submodules from packages (may have hidden dependencies)
 hiddenimports.extend(collect_submodules('fastmcp'))
 hiddenimports.extend(collect_submodules('httpx'))
+hiddenimports.extend(collect_submodules('key_value'))
+hiddenimports.extend(collect_submodules('diskcache'))
+hiddenimports.extend(collect_submodules('pathvalidate'))
 
-# Collect data files from packages if needed
+# Collect data files (non-Python resources only) and metadata
 datas = []
-datas += collect_data_files('fastmcp', include_py_files=True)
 # Copy package metadata for version detection
 datas += copy_metadata('fastmcp')
 datas += copy_metadata('authful-mcp-proxy', recursive=True)
 datas += copy_metadata('httpx')
 datas += copy_metadata('mcp')
+datas += copy_metadata('py-key-value-aio')
+datas += copy_metadata('py-key-value-shared')
 
 a = Analysis(
     ['run_proxy.py'],
@@ -78,7 +93,7 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False,
+    noarchive=True,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
