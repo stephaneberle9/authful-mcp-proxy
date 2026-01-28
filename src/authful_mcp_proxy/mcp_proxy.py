@@ -62,11 +62,34 @@ async def run_async(
     # Create a client that authenticates (once) with the configured OIDC auth provider
     # and connects to the backend MCP server
     async with Client(transport=backend_url, auth=auth) as authenticated_client:
+        # Get server info from the authenticated client to relay it accurately
+        # If the client is connected, initialize_result will be populated
+        init_result = authenticated_client.initialize_result
+        server_info = getattr(init_result, "serverInfo", None)
+
+        # Extract only properties supported by FastMCP.__init__
+        proxy_kwargs = {}
+        if server_info:
+            proxy_kwargs["name"] = getattr(server_info, "name", None)
+            proxy_kwargs["version"] = getattr(server_info, "version", None)
+            # Map camelCase from MCP to snake_case for FastMCP
+            proxy_kwargs["website_url"] = getattr(server_info, "websiteUrl", None)
+            proxy_kwargs["icons"] = getattr(server_info, "icons", None)
+
+        if init_result:
+            # Only relay instructions if they are set
+            instructions = getattr(init_result, "instructions", None)
+            if instructions:
+                proxy_kwargs["instructions"] = instructions
+
         # Create FastMCP proxy server that reuses the connected session for all requests
         # Warning: Sharing the same backend session for all requests may cause context mixing
         # and race conditions in concurrent scenarios. When running this MCP proxy with stdio
         # transport inside MCP clients like Claude Desktop this is generally not the case.
-        mcp_proxy = FastMCP.as_proxy(backend=authenticated_client)
+        mcp_proxy = FastMCP.as_proxy(
+            backend=authenticated_client,
+            **proxy_kwargs,
+        )
 
         # Run via stdio for MCP clients like Claude Desktop
         await mcp_proxy.run_async(
