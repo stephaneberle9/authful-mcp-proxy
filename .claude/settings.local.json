@@ -7,7 +7,14 @@
       "Bash(uv sync:*)",
       "Bash(uv run pytest:*)",
       "Bash(uv run ruff:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(uv pip show:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:gofastmcp.com)",
+      "WebFetch(domain:www.jlowin.dev)",
+      "Bash(gh api:*)"
     ],
     "deny": [],
     "ask": []
