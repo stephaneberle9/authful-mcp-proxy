@@ -19,6 +19,7 @@ Unlike dynamic client registration, this uses pre-configured client credentials
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 import time
 import webbrowser
@@ -29,13 +30,13 @@ from urllib.parse import urlencode, urlparse
 
 import anyio
 import httpx
+from exceptiongroup import BaseExceptionGroup
 from fastmcp.client.auth.oauth import TokenStorageAdapter
 from fastmcp.client.oauth_callback import (
     OAuthCallbackResult,
     create_oauth_callback_server,
 )
 from fastmcp.server.auth.oidc_proxy import OIDCConfiguration
-from fastmcp.utilities.logging import get_logger
 from key_value.aio.stores.disk import DiskStore
 from mcp.client.auth import PKCEParameters, TokenStorage
 from mcp.shared.auth import OAuthToken
@@ -44,10 +45,11 @@ from uvicorn.server import Server
 
 __all__ = ["ExternalOIDCAuth"]
 
-logger = get_logger(__name__)
+# Use 'logging' instead of 'fastmcp.utilities.logging' to avoid mixin of FastMCP-formatted log message
+logger = logging.getLogger(__name__)
 
 HTTPX_REQUEST_TIMEOUT_SECONDS = 5
-BROWSER_LOGIN_TIMEOUT_SECONDS = 300
+BROWSER_LOGIN_TIMEOUT_SECONDS = 30
 
 
 @dataclass
@@ -302,7 +304,7 @@ class ExternalOIDCAuth(httpx.Auth):
         async with anyio.create_task_group() as tg:
             tg.start_soon(server.serve)
             logger.info(
-                f"🎧 OIDC Auth callback server started on {self.context.redirect_uri}"
+                f"OIDC Auth callback server started on {self.context.redirect_uri}"
             )
 
             try:
@@ -323,7 +325,8 @@ class ExternalOIDCAuth(httpx.Auth):
                     return result_container.code, result_container.state
             except TimeoutError:
                 raise TimeoutError(
-                    f"OIDC Auth callback timed out after {BROWSER_LOGIN_TIMEOUT_SECONDS} seconds"
+                    f"OIDC Auth callback timed out after {BROWSER_LOGIN_TIMEOUT_SECONDS} seconds, "
+                    f"check browser for errors"
                 )
             finally:
                 server.should_exit = True
@@ -469,6 +472,13 @@ class ExternalOIDCAuth(httpx.Auth):
                 # Retry request
                 response = yield request
             except Exception as e:
-                logger.error(f"Token refresh and retry failed: {e}")
+                # Extract root cause from exception groups to avoid
+                # "unhandled errors in a TaskGroup (1 sub-exception)" messages
+                cause: BaseException = e
+                while (
+                    isinstance(cause, BaseExceptionGroup) and len(cause.exceptions) == 1
+                ):
+                    cause = cause.exceptions[0]
+                logger.error(f"Token refresh and retry failed: {cause}")
                 # Return original 401 response
                 pass

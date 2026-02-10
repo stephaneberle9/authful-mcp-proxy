@@ -18,6 +18,9 @@ import logging
 import os
 import sys
 
+import httpx
+from exceptiongroup import BaseExceptionGroup
+
 from . import __version__, mcp_proxy
 from .config import OIDCConfig
 
@@ -110,6 +113,35 @@ def cli():
     return args
 
 
+class _LowercaseLevelFormatter(logging.Formatter):
+    """Formatter that lowercases the level name to match Claude Desktop log style."""
+
+    def format(self, record):
+        record.levelname = record.levelname.lower()
+        return super().format(record)
+
+
+def configure_logging(args):
+    """Configure logging based on command line arguments."""
+    if args.silent:
+        log_level = logging.ERROR
+    elif args.debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    # Redirect logging to stderr (stdio transport reserves stdout for MCP JSON-RPC traffic)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(
+        _LowercaseLevelFormatter(
+            fmt="%(asctime)s.%(msecs)03dZ [%(name)s] [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        )
+    )
+    logging.root.addHandler(handler)
+    logging.root.setLevel(log_level)
+
+
 def get_log_level_name(args) -> str:
     """
     Determine the appropriate log level based on command line arguments.
@@ -128,6 +160,20 @@ def get_log_level_name(args) -> str:
         return logging.getLevelName(logging.INFO)
 
 
+def _extract_root_cause(eg: BaseExceptionGroup) -> BaseException:
+    """Extract the root cause from singly-nested exception groups.
+
+    Exceptions from anyio task groups and asyncio often get wrapped in multiple
+    layers of BaseExceptionGroup. This recursively unwraps to find the actual cause.
+    """
+    exceptions = eg.exceptions
+    while len(exceptions) == 1 and isinstance(exceptions[0], BaseExceptionGroup):
+        exceptions = exceptions[0].exceptions
+    if len(exceptions) == 1:
+        return exceptions[0]
+    return eg
+
+
 def main():
     """
     Main entry point for the Authful MCP Proxy application.
@@ -139,6 +185,7 @@ def main():
     Exits with status code 1 on errors, 0 on successful completion.
     """
     args = cli()
+    configure_logging(args)
 
     try:
         # Create OIDC config
@@ -162,6 +209,21 @@ def main():
     except KeyboardInterrupt:
         # Graceful shutdown, suppress noisy logs resulting from asyncio.run task cancellation propagation
         pass
+    except BaseExceptionGroup as eg:
+        # Required to properly handle exceptions raised in nested async task groups
+        # (e.g., SystemExit from uvicorn when a port is already in use)
+        cause = _extract_root_cause(eg)
+        if isinstance(cause, KeyboardInterrupt):
+            pass
+        elif isinstance(cause, SystemExit):
+            # SystemExit from uvicorn loses the original error message;
+            # check __context__ for the real cause (e.g., OSError from port binding)
+            context = getattr(cause, "__context__", None)
+            if context:
+                logger.error(context)
+        else:
+            logger.error(cause)
+        sys.exit(1)
     except ValueError as e:
         # Configuration error, log w/o stack trace
         logger.error(f"Configuration error: {e}")
@@ -170,10 +232,16 @@ def main():
         # Runtime error, log w/o stack trace
         logger.error(f"Runtime error: {e}")
         sys.exit(1)
+    except httpx.HTTPStatusError as e:
+        # HTTP error from backend server, log w/o stack trace
+        logger.error(f"Backend error: {e}")
+        sys.exit(1)
     except Exception as e:
         # Unexpected internal error, include full stack trace
         logger.error(f"Internal error: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        logging.shutdown()
 
 
 if __name__ == "__main__":
