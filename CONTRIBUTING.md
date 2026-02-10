@@ -4,22 +4,25 @@ Thank you for your interest in contributing! This document covers development se
 
 ## Table of Contents
 
-- [Development Setup](#development-setup)
-- [Running the Project](#running-the-project)
-  - [Inside Dev Environment](#inside-dev-environment)
-  - [Outside Dev Environment](#outside-dev-environment)
-  - [With MCP Inspector](#with-mcp-inspector)
-  - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
-- [Code Quality](#code-quality)
-  - [Pre-commit Hooks](#pre-commit-hooks)
-  - [Manual Checks](#manual-checks)
-- [Testing](#testing)
-- [CI/CD Workflows](#cicd-workflows)
-  - [Static Analysis](#static-analysis)
-  - [Test Suite](#test-suite)
-  - [Publishing](#publishing)
-- [Creating a Release](#creating-a-release)
-- [Building Packages](#building-packages)
+- [Contributing to Authful MCP Proxy](#contributing-to-authful-mcp-proxy)
+  - [Table of Contents](#table-of-contents)
+  - [Development Setup](#development-setup)
+  - [Running the Project](#running-the-project)
+    - [Inside Dev Environment](#inside-dev-environment)
+    - [Outside Dev Environment](#outside-dev-environment)
+    - [With MCP Inspector](#with-mcp-inspector)
+    - [With Claude Desktop](#with-claude-desktop)
+    - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
+  - [Code Quality](#code-quality)
+    - [Pre-commit Hooks](#pre-commit-hooks)
+    - [Manual Checks](#manual-checks)
+  - [Testing](#testing)
+  - [CI/CD Workflows](#cicd-workflows)
+    - [Static Analysis](#static-analysis)
+    - [Test Suite](#test-suite)
+    - [Publishing](#publishing)
+  - [Creating a Release](#creating-a-release)
+  - [Building Packages](#building-packages)
 
 ## Development Setup
 
@@ -64,10 +67,10 @@ deactivate
 
 ```bash
 # Run the MCP server directly from the sources (see --help for CLI options)
-uv run --env-file .env --project "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
+uv run --env-file /path/to/authful-mcp-proxy/.env --project "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
 
 # Run as editable install to enable live code reloading during development (see --help for CLI options)
-uv run --env-file .env --with-editable "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
+uv run --env-file /path/to/authful-mcp-proxy/.env --with-editable "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
 ```
 
 ### With MCP Inspector
@@ -90,7 +93,7 @@ Create an `mcp.json` file containing:
       "env": {
           "OIDC_ISSUER_URL": "https://auth.company.com",
           "OIDC_CLIENT_ID": "your-client-id",
-          "OIDC_CLIENT_SECRET": "your-client-secret", // optional for public OIDC clients that don't require any such
+          "OIDC_CLIENT_SECRET": "your-client-secret", // to be omitted for public OIDC clients that don't require any such
           "OIDC_SCOPES": "openid profile",
           "OIDC_REDIRECT_URL": "http://localhost:8080/auth/callback"
       }
@@ -111,6 +114,53 @@ In your browser, connect to your MCP proxy server, authenticate and use the tool
 - Sign up/sign in and approve required scopes as needed
 - List tools of backend MCP server: `Tools` > `List Tools`
 - Find MCP proxy server logs under `Server Notifications`
+
+### With Claude Desktop
+
+Add the following to your Claude Desktop configuration file (`claude_desktop_config.json`), adjusting the paths to match your local setup:
+
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```jsonc
+{
+  "mcpServers": {
+    "authful-mcp-proxy": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--env-file", // optional, can also be provided via "env" object
+        "/path/to/authful-mcp-proxy/.env",
+        "--with-editable",
+        "/path/to/authful-mcp-proxy",
+        "authful-mcp-proxy",
+        "https://mcp-backend.company.com/mcp"
+      ],
+      // Optional, can also be provided via .env file
+      "env": {
+        "OIDC_ISSUER_URL": "https://auth.company.com",
+        "OIDC_CLIENT_ID": "your-client-id",
+        "OIDC_CLIENT_SECRET": "your-client-secret", // to be omitted for public OIDC clients that don't require any such
+        "OIDC_SCOPES": "openid profile",
+        "OIDC_REDIRECT_URL": "http://localhost:8080/auth/callback"
+      }
+    }
+  }
+}
+```
+
+After saving the configuration, restart Claude Desktop. Then:
+
+- Sign up/sign in and approve required scopes as needed
+- Open a new chat, click `+` and verify that `authful-mcp-proxy` appears under `Connectors`
+- Use the tools, resources and prompts of the backend MCP server
+
+If an error popup appears, open the MCP server logs to diagnose the issue:
+
+- **Windows**: `%LOCALAPPDATA%\Claude\Logs\mcp-server-authful-mcp-proxy.log`
+- **macOS**: `~/Library/Logs/Claude/mcp-server-authful-mcp-proxy.log`
+
+Alternatively, go to `Settings` > `Developer` > select `authful-mcp-proxy` > `Open Logs Folder`.
 
 ### With Minimal Token-Validating MCP Backend Example
 
