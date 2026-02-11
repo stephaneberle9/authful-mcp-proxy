@@ -327,10 +327,12 @@ uvx authful-mcp-proxy \
 
 ### Where Are Credentials Stored?
 
-Credentials are cached in `~/.mcp/authful_mcp_proxy/tokens/` with filenames based on the OIDC issuer URL:
+Credentials are cached in `~/.mcp-auth/authful-mcp-proxy-<version>/` (where `<version>` is the installed package version, e.g. `0.5.0`) as a SQLite database:
 ```
-~/.mcp/authful_mcp_proxy/tokens/
-  └── https_auth_example_com_tokens.json
+~/.mcp-auth/authful-mcp-proxy-0.5.0/
+  ├── cache.db
+  ├── cache.db-shm
+  └── cache.db-wal
 ```
 
 ### Clear Cached Credentials
@@ -339,10 +341,10 @@ To force re-authentication (e.g., to switch accounts or clear expired tokens):
 
 ```bash
 # Linux/macOS
-rm -rf ~/.mcp/authful_mcp_proxy/tokens/
+rm -rf ~/.mcp-auth/authful-mcp-proxy*
 
 # Windows
-rmdir /s %USERPROFILE%\.mcp\authful_mcp_proxy\tokens
+rmdir /s %USERPROFILE%\.mcp-auth\authful-mcp-proxy*
 ```
 
 The next time you connect, you'll be prompted to authenticate again.

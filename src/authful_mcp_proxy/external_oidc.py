@@ -43,6 +43,8 @@ from mcp.shared.auth import OAuthToken
 from pydantic import AnyHttpUrl
 from uvicorn.server import Server
 
+from . import __version__
+
 __all__ = ["ExternalOIDCAuth"]
 
 # Use 'logging' instead of 'fastmcp.utilities.logging' to avoid mixin of FastMCP-formatted log message
@@ -215,7 +217,7 @@ class ExternalOIDCAuth(httpx.Auth):
             client_secret: Static OAuth client secret (optional for public OIDC clients that don't require any such)
             scopes: OAuth scopes to request (default: ["openid"]). Can be a
             space-separated string or a list of strings.
-            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp/authful_mcp_proxy/tokens/)
+            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp-auth/authful-mcp-proxy-<version>/)
             redirect_url: Localhost URL for OAuth redirect (default: http://localhost:8080/auth/callback)
         """
         # Validate required parameters
@@ -244,7 +246,7 @@ class ExternalOIDCAuth(httpx.Auth):
         # Use a default cache directory if none is provided
         cache_dir = (
             token_storage_cache_dir
-            or Path.home() / ".mcp" / "authful_mcp_proxy" / "tokens"
+            or Path.home() / ".mcp-auth" / f"authful-mcp-proxy-{__version__}"
         )
         disk_store = DiskStore(directory=cache_dir)
         storage = TokenStorageAdapter(async_key_value=disk_store, server_url=issuer_url)
