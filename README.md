@@ -61,12 +61,17 @@ This MCP proxy fills that gap by handling authentication independently through d
 This tool requires `uvx` (part of [uv](https://docs.astral.sh/uv/)). Install it via:
 
 ```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Windows
 winget install --id=astral-sh.uv -e
+
+# macOS
+brew install uv
+
+# Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+> **macOS note:** The `curl` installer places `uv` in `~/.local/bin/` and updates your shell profile, but macOS GUI apps like Claude Desktop do not load shell startup files. This means Claude Desktop won't find `uv` even though it works in your terminal. Installing via Homebrew avoids this entirely since it places `uv` in `/opt/homebrew/bin/` (Apple Silicon) or `/usr/local/bin/` (Intel), which GUI apps can see. If you already installed `uv` via `curl`, either reinstall with `brew install uv` or symlink it: `sudo ln -s ~/.local/bin/uv /usr/local/bin/uv`
 
 See the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/) for more options.
 
