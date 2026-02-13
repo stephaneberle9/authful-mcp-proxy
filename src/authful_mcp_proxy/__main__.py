@@ -20,6 +20,7 @@ import sys
 
 import httpx
 from exceptiongroup import BaseExceptionGroup
+from mcp.shared.exceptions import McpError
 
 from . import __version__, mcp_proxy
 from .config import OIDCConfig
@@ -232,8 +233,8 @@ def main():
         # Runtime error, log w/o stack trace
         logger.error(f"Runtime error: {e}")
         sys.exit(1)
-    except httpx.HTTPStatusError as e:
-        # HTTP error from backend server, log w/o stack trace
+    except (httpx.HTTPStatusError, McpError) as e:
+        # Backend or MCP protocol error (e.g., HTTP 4xx/5xx or session failure), log w/o stack trace
         logger.error(f"Backend error: {e}")
         sys.exit(1)
     except Exception as e:
