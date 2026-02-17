@@ -161,7 +161,7 @@ def get_log_level_name(args) -> str:
         return logging.getLevelName(logging.INFO)
 
 
-def _extract_root_cause(eg: BaseExceptionGroup) -> BaseException:
+def extract_root_cause(eg: BaseExceptionGroup) -> BaseException:
     """Extract the root cause from singly-nested exception groups.
 
     Exceptions from anyio task groups and asyncio often get wrapped in multiple
@@ -173,6 +173,60 @@ def _extract_root_cause(eg: BaseExceptionGroup) -> BaseException:
     if len(exceptions) == 1:
         return exceptions[0]
     return eg
+
+
+def log_error_and_exit(exc: BaseException) -> None:
+    """Log an exception appropriately and exit with status 1.
+
+    Provides clean error messages without stack traces for expected error types,
+    and full tracebacks for unexpected internal errors. Recursively handles
+    BaseExceptionGroup by extracting and processing the root cause.
+
+    Args:
+        exc: The exception to log and handle.
+    """
+    if isinstance(exc, KeyboardInterrupt):
+        # Graceful shutdown - exit without logging
+        return
+
+    # Handle BaseExceptionGroup recursively
+    if isinstance(exc, BaseExceptionGroup):
+        cause = extract_root_cause(exc)
+        if isinstance(cause, SystemExit):
+            # SystemExit from uvicorn loses the original error message;
+            # check __context__ for the real cause (e.g., OSError from port binding)
+            context = getattr(cause, "__context__", None)
+            log_error_and_exit(context if context else cause)
+        else:
+            log_error_and_exit(cause)
+        return
+
+    # Log based on exception type
+    if isinstance(exc, httpx.HTTPStatusError | McpError):
+        logger.error(f"Backend error: {exc}")
+    elif isinstance(
+        exc,
+        httpx.ConnectError
+        | httpx.ConnectTimeout
+        | httpx.ReadTimeout
+        | httpx.TimeoutException,
+    ):
+        logger.error(f"Network error: {exc}")
+    elif isinstance(exc, OSError):
+        logger.error(f"System error: {exc}")
+    elif isinstance(exc, ValueError):
+        logger.error(f"Configuration error: {exc}")
+    elif isinstance(exc, RuntimeError):
+        logger.error(f"Runtime error: {exc}")
+    elif isinstance(exc, SystemExit):
+        # Unexpected system exit without proper context
+        logger.error(f"Unexpected system exit: {exc}")
+        sys.exit(exc.code if exc.code is not None else 1)
+    else:
+        # Unexpected internal error - include full traceback for debugging
+        logger.error(f"Internal error: {exc}", exc_info=exc)
+
+    sys.exit(1)
 
 
 def main():
@@ -207,40 +261,10 @@ def main():
                 log_level=get_log_level_name(args),
             )
         )
-    except KeyboardInterrupt:
-        # Graceful shutdown, suppress noisy logs resulting from asyncio.run task cancellation propagation
-        pass
-    except BaseExceptionGroup as eg:
-        # Required to properly handle exceptions raised in nested async task groups
-        # (e.g., SystemExit from uvicorn when a port is already in use)
-        cause = _extract_root_cause(eg)
-        if isinstance(cause, KeyboardInterrupt):
-            pass
-        elif isinstance(cause, SystemExit):
-            # SystemExit from uvicorn loses the original error message;
-            # check __context__ for the real cause (e.g., OSError from port binding)
-            context = getattr(cause, "__context__", None)
-            if context:
-                logger.error(context)
-        else:
-            logger.error(cause)
-        sys.exit(1)
-    except ValueError as e:
-        # Configuration error, log w/o stack trace
-        logger.error(f"Configuration error: {e}")
-        sys.exit(1)
-    except RuntimeError as e:
-        # Runtime error, log w/o stack trace
-        logger.error(f"Runtime error: {e}")
-        sys.exit(1)
-    except (httpx.HTTPStatusError, McpError) as e:
-        # Backend or MCP protocol error (e.g., HTTP 4xx/5xx or session failure), log w/o stack trace
-        logger.error(f"Backend error: {e}")
-        sys.exit(1)
     except Exception as e:
-        # Unexpected internal error, include full stack trace
-        logger.error(f"Internal error: {e}", exc_info=True)
-        sys.exit(1)
+        # Catch-all for any exceptions (BaseExceptionGroup, KeyboardInterrupt, etc.)
+        # All exception handling logic is in log_error_and_exit
+        log_error_and_exit(e)
     finally:
         logging.shutdown()
 
