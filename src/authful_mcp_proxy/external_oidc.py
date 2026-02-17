@@ -50,6 +50,31 @@ __all__ = ["ExternalOIDCAuth"]
 # Use 'logging' instead of 'fastmcp.utilities.logging' to avoid mixin of FastMCP-formatted log message
 logger = logging.getLogger(__name__)
 
+# Add file handler for token refresh logging
+# Log file will be created in the cache directory (e.g., ~/.mcp-auth/authful-mcp-proxy-dev/)
+# Note: Cache directory is determined later during auth initialization, so we'll set this up there
+_token_refresh_log_handler = None
+
+
+def _setup_token_refresh_logging(cache_dir: Path):
+    """Set up file logging for token refresh events."""
+    global _token_refresh_log_handler
+    if _token_refresh_log_handler:
+        return  # Already set up
+
+    token_refresh_log = cache_dir / "token_refresh.log"
+    _token_refresh_log_handler = logging.FileHandler(
+        token_refresh_log, mode="a", encoding="utf-8"
+    )
+    _token_refresh_log_handler.setLevel(logging.DEBUG)
+    _token_refresh_log_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+    )
+    logger.addHandler(_token_refresh_log_handler)
+
+
 HTTPX_REQUEST_TIMEOUT_SECONDS = 5
 BROWSER_LOGIN_TIMEOUT_SECONDS = 30
 
@@ -244,12 +269,20 @@ class ExternalOIDCAuth(httpx.Auth):
         # Initialize token storage using DiskStore and TokenStorageAdapter
         # DiskStore provides persistent disk-based storage for OAuth tokens
         # Use a default cache directory if none is provided
+        # For development versions (with git hash), use stable 'dev' directory
+        # to avoid creating new cache for each commit
+        version_suffix = (
+            "dev" if "+g" in __version__ or ".dev" in __version__ else __version__
+        )
         cache_dir = (
             token_storage_cache_dir
-            or Path.home() / ".mcp-auth" / f"authful-mcp-proxy-{__version__}"
+            or Path.home() / ".mcp-auth" / f"authful-mcp-proxy-{version_suffix}"
         )
         disk_store = DiskStore(directory=cache_dir)
         storage = TokenStorageAdapter(async_key_value=disk_store, server_url=issuer_url)
+
+        # Set up token refresh logging to file in cache directory
+        _setup_token_refresh_logging(cache_dir)
 
         # Fetch OIDC configuration
         config_url = f"{issuer_url.rstrip('/')}/.well-known/openid-configuration"
@@ -283,9 +316,22 @@ class ExternalOIDCAuth(httpx.Auth):
         if self._initialized:
             return
 
-        self.context.set_tokens(await self.context.storage.get_tokens())
+        stored_tokens = await self.context.storage.get_tokens()
+        self.context.set_tokens(stored_tokens)
+        has_access = (
+            bool(stored_tokens and stored_tokens.access_token)
+            if stored_tokens
+            else False
+        )
+        has_refresh = (
+            bool(stored_tokens and stored_tokens.refresh_token)
+            if stored_tokens
+            else False
+        )
+        logger.info(
+            f"[INIT] OIDC Auth initialized: access_token={has_access}, refresh_token={has_refresh}"
+        )
         self._initialized = True
-        logger.debug("OIDC Auth client initialized")
 
     async def _run_callback_server(self) -> tuple[str, str]:
         """Handle OAuth callback and return (auth_code, state)."""
@@ -406,6 +452,15 @@ class ExternalOIDCAuth(httpx.Auth):
 
             # Parse and store new tokens
             tokens = OAuthToken.model_validate(token_response)
+
+            # Preserve existing refresh token if response doesn't include a new one
+            # Per OAuth 2.0 spec, refresh token is optional in refresh responses
+            if not tokens.refresh_token and self.context.current_tokens:
+                tokens.refresh_token = self.context.current_tokens.refresh_token
+                logger.debug(
+                    "[REFRESH] Preserved existing refresh token (not in response)"
+                )
+
             await self.context.storage.set_tokens(tokens)
             self.context.set_tokens(tokens)
 
@@ -423,22 +478,29 @@ class ExternalOIDCAuth(httpx.Auth):
 
         # If token is valid, return it
         if self.context.is_token_valid():
+            logger.debug("[TOKEN] Using cached valid token")
             return self.context.get_access_token()
 
         # Token expired or missing - refresh or re-auth
+        logger.info("[TOKEN] Token expired/missing, attempting renewal")
         return await self._renew_token()
 
     async def _renew_token(self) -> str:
         """Handle authentication errors by refreshing or re-authenticating."""
         if self.context.can_refresh_token():
             try:
+                logger.info("[REFRESH] Attempting silent token refresh...")
                 await self._refresh_tokens()
-                logger.debug("Token refreshed successfully")
+                logger.info(
+                    "[REFRESH] Token refreshed successfully (no browser needed)"
+                )
             except Exception as e:
-                logger.warning(f"Token refresh failed: {e}, performing full auth flow")
+                logger.warning(f"[REFRESH] Token refresh failed: {e}")
+                logger.warning("[AUTH] Opening browser for full re-authentication")
                 await self._perform_auth_flow()
         else:
-            logger.debug("No refresh token available, performing full auth flow")
+            logger.warning("[AUTH] No refresh token available")
+            logger.warning("[AUTH] Opening browser for full re-authentication")
             await self._perform_auth_flow()
 
         return self.context.get_access_token()
