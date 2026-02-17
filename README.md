@@ -122,7 +122,7 @@ All options can be set via environment variables in the `env` block or passed as
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `OIDC_CLIENT_SECRET` | _(none)_ | Client secret (not needed for public clients that don't require any such) |
-| `OIDC_SCOPES` | `openid profile email` | Space-separated OAuth scopes |
+| `OIDC_SCOPES` | `openid profile email` | Space-separated OAuth scopes. Add `offline_access` for providers like Keycloak, Auth0, or Okta for silent token refresh avoiding repeated browser-based auth flows. **Not needed for AWS Cognito** (issues refresh tokens automatically). |
 | `OIDC_REDIRECT_URL` | `http://localhost:8080/auth/callback` | OAuth callback URL |
 
 ### Advanced Options
@@ -387,12 +387,16 @@ The next time you connect, you'll be prompted to authenticate again.
 
 ### Token Refresh Failures
 
-**Problem:** Proxy works initially but fails after some time.
+**Problem:** Proxy works initially but fails after some time, or browser opens repeatedly (hourly) for re-authentication.
 
 **Solutions:**
 1. Check if your OIDC provider issued a refresh token (some providers don't for certain grant types)
-2. Verify the `offline_access` scope is requested if required by your provider
-3. Clear cached credentials to get new tokens: `rm -rf ~/.fastmcp/oauth-mcp-client-cache/`
+2. **For Keycloak, Auth0, Okta:** Add `offline_access` to `OIDC_SCOPES` to enable refresh tokens:
+   ```
+   "OIDC_SCOPES": "openid profile email offline_access"
+   ```
+3. **For AWS Cognito:** Refresh tokens are issued automatically - verify your app client has "Authorization code grant" enabled in the Cognito console
+4. Clear cached credentials to get new tokens: `rm -rf ~/.mcp-auth/authful-mcp-proxy*/`
 
 ### Connection to Backend Fails
 
