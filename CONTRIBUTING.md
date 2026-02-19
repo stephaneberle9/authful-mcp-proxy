@@ -23,6 +23,10 @@ Thank you for your interest in contributing! This document covers development se
     - [Publishing](#publishing)
   - [Creating a Release](#creating-a-release)
   - [Building Packages](#building-packages)
+  - [Dependency Management and Lock Files](#dependency-management-and-lock-files)
+    - [Why `uvx` Doesn't Use `uv.lock`](#why-uvx-doesnt-use-uvlock)
+    - [Ensuring Compatibility for `uvx` Users](#ensuring-compatibility-for-uvx-users)
+    - [When to Update `uv.lock`](#when-to-update-uvlock)
 
 ## Development Setup
 
@@ -346,3 +350,55 @@ uv build
 ```
 
 This will create a `dist` folder containing an `authful_mcp_proxy X.X.X.tar.gz` and an `authful_mcp_proxy X.X.X-py3-none-any.whl` file.
+
+## Dependency Management and Lock Files
+
+### Why `uvx` Doesn't Use `uv.lock`
+
+When users run `uvx authful-mcp-proxy`, the `uv.lock` file is **not used**. This is by design and is standard Python packaging practice:
+
+1. **Wheels don't contain lock files**: When publishing to PyPI, the wheel format (preferred by installers) only contains:
+   - Package code
+   - Metadata from `pyproject.toml`
+   - Licenses
+   
+   The `uv.lock` file is deliberately excluded from wheels.
+
+2. **Lock files are development tools**: The `uv.lock` file ensures reproducible development environments when using `uv sync`. It's not part of the PEP 517/621 distribution metadata standard.
+
+3. **uvx creates ephemeral environments**: When running `uvx authful-mcp-proxy`:
+   - Downloads the package from PyPI (usually the wheel)
+   - Creates a temporary virtual environment
+   - Resolves dependencies from package metadata (derived from `pyproject.toml`)
+   - No mechanism exists to read or use lock files from the installed package
+
+### Ensuring Compatibility for `uvx` Users
+
+To ensure users get compatible dependency versions when running `uvx authful-mcp-proxy`, we use **version constraints in `pyproject.toml`**:
+
+```toml
+dependencies = [
+    "fastmcp>=2.14.0,<3.0.0",  # Prevents incompatible fastmcp 3.x
+    "py-key-value-aio[disk]>=0.3.0",  # Explicitly requires disk extra
+]
+```
+
+These constraints:
+- ✅ Are included in the wheel metadata
+- ✅ Are respected by all package installers (uvx, pip, poetry, etc.)
+- ✅ Prevent breaking changes from transitive dependencies
+- ✅ Follow standard Python packaging best practices
+
+### When to Update `uv.lock`
+
+Update the lock file whenever dependencies change:
+
+```bash
+# After modifying pyproject.toml dependencies
+uv lock
+
+# Verify the lock file is current
+uv sync
+```
+
+The lock file ensures all developers use identical dependency versions, but remember: **end users will get versions based on `pyproject.toml` constraints, not the lock file**.

@@ -66,6 +66,7 @@ name = "authful-mcp-proxy"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
+    { name = "py-key-value-aio", extra = ["disk"] },
 ]
 
 [package.dev-dependencies]
@@ -85,7 +86,10 @@ test = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fastmcp", specifier = ">=2.14.0" }]
+requires-dist = [
+    { name = "fastmcp", specifier = ">=2.14.0,<3.0.0" },
+    { name = "py-key-value-aio", extras = ["disk"], specifier = ">=0.3.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
