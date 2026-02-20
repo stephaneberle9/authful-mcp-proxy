@@ -19,7 +19,7 @@ implementing OIDC authentication themselves.
 from typing import Any
 
 from fastmcp import Client
-from fastmcp.server import FastMCP
+from fastmcp.server import create_proxy
 
 from .config import OIDCConfig
 from .external_oidc import ExternalOIDCAuth
@@ -86,8 +86,8 @@ async def run_async(
         # Warning: Sharing the same backend session for all requests may cause context mixing
         # and race conditions in concurrent scenarios. When running this MCP proxy with stdio
         # transport inside MCP clients like Claude Desktop this is generally not the case.
-        mcp_proxy = FastMCP.as_proxy(
-            backend=authenticated_client,
+        mcp_proxy = create_proxy(
+            authenticated_client,
             **proxy_kwargs,
         )
 

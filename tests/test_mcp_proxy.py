@@ -56,18 +56,19 @@ async def test_run_async_relays_server_info():
             mock_client.initialize_result = mock_init_result
             mock_client_cls.return_value = mock_client
 
-            # Mock FastMCP.as_proxy
-            with patch("authful_mcp_proxy.mcp_proxy.FastMCP.as_proxy") as mock_as_proxy:
+            # Mock create_proxy
+            with patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_as_proxy:
                 mock_proxy_server = AsyncMock()
                 mock_as_proxy.return_value = mock_proxy_server
 
                 # Run the function
                 await mcp_proxy.run_async(backend_url, oidc_config, show_banner=False)
 
-                # Verify FastMCP.as_proxy was called with the correct relayed properties (filtered)
+                # Verify create_proxy was called with the correct relayed properties (filtered)
                 mock_as_proxy.assert_called_once()
-                call_kwargs = mock_as_proxy.call_args.kwargs
-                assert call_kwargs["backend"] == mock_client
+                call_args = mock_as_proxy.call_args
+                assert call_args.args[0] == mock_client
+                call_kwargs = call_args.kwargs
                 assert call_kwargs["name"] == "BackendServer"
                 assert call_kwargs["version"] == "1.2.3"
                 assert call_kwargs["instructions"] == "Test instructions"
