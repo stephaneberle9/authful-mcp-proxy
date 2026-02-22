@@ -1,46 +1,49 @@
-# Contributing to Authful MCP Proxy
+<!-- omit from toc -->
+Contributing
+============
 
-Thank you for your interest in contributing! This document covers development setup, testing, and the release process.
+- [Development Setup](#development-setup)
+  - [Prerequisites](#prerequisites)
+  - [Initial Setup](#initial-setup)
+- [Running the Server](#running-the-server)
+  - [Inside dev environment](#inside-dev-environment)
+  - [Outside dev environment](#outside-dev-environment)
+  - [With MCP Inspector](#with-mcp-inspector)
+  - [With Claude Desktop](#with-claude-desktop)
+  - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
+- [Code Quality](#code-quality)
+  - [Enable automatic execution on git commit](#enable-automatic-execution-on-git-commit)
+  - [Manual execution](#manual-execution)
+- [Testing](#testing)
+- [CI/CD Workflows](#cicd-workflows)
+  - [Static Analysis](#static-analysis)
+  - [Test Suite](#test-suite)
+  - [Publishing](#publishing)
+- [Release Process](#release-process)
+- [Building Packages](#building-packages)
+- [Dependency Management and Lock Files](#dependency-management-and-lock-files)
+  - [Why `uvx` Doesn't Use `uv.lock`](#why-uvx-doesnt-use-uvlock)
+  - [Ensuring Compatibility for `uvx` Users](#ensuring-compatibility-for-uvx-users)
+  - [When to Update `uv.lock`](#when-to-update-uvlock)
 
-## Table of Contents
+Development Setup
+-----------------
 
-- [Contributing to Authful MCP Proxy](#contributing-to-authful-mcp-proxy)
-  - [Table of Contents](#table-of-contents)
-  - [Development Setup](#development-setup)
-  - [Running the Project](#running-the-project)
-    - [Inside Dev Environment](#inside-dev-environment)
-    - [Outside Dev Environment](#outside-dev-environment)
-    - [With MCP Inspector](#with-mcp-inspector)
-    - [With Claude Desktop](#with-claude-desktop)
-    - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
-  - [Code Quality](#code-quality)
-    - [Pre-commit Hooks](#pre-commit-hooks)
-    - [Manual Checks](#manual-checks)
-  - [Testing](#testing)
-  - [CI/CD Workflows](#cicd-workflows)
-    - [Static Analysis](#static-analysis)
-    - [Test Suite](#test-suite)
-    - [Publishing](#publishing)
-  - [Creating a Release](#creating-a-release)
-  - [Building Packages](#building-packages)
-  - [Dependency Management and Lock Files](#dependency-management-and-lock-files)
-    - [Why `uvx` Doesn't Use `uv.lock`](#why-uvx-doesnt-use-uvlock)
-    - [Ensuring Compatibility for `uvx` Users](#ensuring-compatibility-for-uvx-users)
-    - [When to Update `uv.lock`](#when-to-update-uvlock)
+### Prerequisites
 
-## Development Setup
+- [Python 3.10](https://www.python.org/downloads) or later
+- [uv](https://docs.astral.sh/uv/) — Python package and project manager
 
-- Install [Python 3.10](https://www.python.org/downloads) or later
-- Install required development tools:
+### Initial Setup
 
-  ```bash
-  # Install build tools and uv package manager
-  python -m pip install build uv
-  ```
+Install required development tools:
 
-## Running the Project
+```bash
+# Install build tools and uv package manager
+python -m pip install build uv
+```
 
-### Inside Dev Environment
+Clone the repository and install the package in editable mode:
 
 ```bash
 # Create virtual environment
@@ -52,10 +55,19 @@ source ./.venv/bin/activate  # Linux/macOS
 
 # Install project in editable mode with live code reloading
 uv sync
+```
 
-# Run the MCP server:
+Running the Server
+------------------
 
-# (see --help for CLI options)
+### Inside dev environment
+
+```bash
+# Activate virtual environment
+.venv\Scripts\activate  # Windows
+source ./.venv/bin/activate  # Linux/macOS
+
+# Run the MCP proxy server (see --help for CLI options)
 authful-mcp-proxy [options] https://mcp-backend.company.com/mcp
 # or
 uv run --env-file .env authful-mcp-proxy [options]
@@ -67,7 +79,7 @@ uv run --env-file .env authful-mcp-proxy [options]
 deactivate
 ```
 
-### Outside Dev Environment
+### Outside dev environment
 
 ```bash
 # Run the MCP server directly from the sources (see --help for CLI options)
@@ -114,6 +126,7 @@ npx -y @modelcontextprotocol/inspector --config mcp.json --server authful-mcp-pr
 ```
 
 In your browser, connect to your MCP proxy server, authenticate and use the tools, resources and prompts of the backend MCP server:
+
 - Connect to MCP proxy server: `Connect`
 - Sign up/sign in and approve required scopes as needed
 - List tools of backend MCP server: `Tools` > `List Tools`
@@ -188,17 +201,21 @@ uv pip install -r requirements.txt
 uv run --env-file .env mcp_backend.py
 ```
 
-## Code Quality
+Code Quality
+------------
 
-This project uses `pre-commit` hooks for running static checks to maintain high code quality standards. These static checks include:
+This project uses `pre-commit` hooks for running static checks to maintain high code quality standards:
 
-- **Ruff**: Python linting and code formatting
-- **ty**: Modern type checking for Python
-- **Prettier**: JSON, YAML, and Markdown formatting
-- **Codespell**: Common spelling error detection
-- **pyproject.toml validation**: Project configuration validation
+| Hook                   | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| `ruff-format`          | Python code formatting                  |
+| `ruff-check`           | Python linting (with auto-fix)          |
+| `ty check`             | Modern type checking for Python         |
+| `prettier`             | JSON, YAML, and Markdown formatting     |
+| `codespell`            | Common spelling error detection         |
+| `validate-pyproject`   | Project configuration validation        |
 
-### Pre-commit Hooks
+### Enable automatic execution on git commit
 
 ```bash
 # Activate virtual environment
@@ -209,7 +226,7 @@ source ./.venv/bin/activate  # Linux/macOS
 uv run pre-commit install
 ```
 
-### Manual Checks
+### Manual execution
 
 ```bash
 # Run all checks on all files
@@ -221,7 +238,8 @@ uv run ruff check --fix     # Linting with auto-fix
 uv run ty check             # Type checking
 ```
 
-## Testing
+Testing
+-------
 
 This project includes a comprehensive test suite to ensure reliability and maintainability of the MCP proxy server functionality. They include:
 
@@ -260,7 +278,8 @@ uv run pytest --cov-report=html
 # Open htmlcov/index.html to view detailed coverage
 ```
 
-## CI/CD Workflows
+CI/CD Workflows
+---------------
 
 This project uses GitHub Actions for continuous integration and deployment. All workflows are located in `.github/workflows/`.
 
@@ -269,11 +288,13 @@ This project uses GitHub Actions for continuous integration and deployment. All 
 **Workflow:** `run-static.yml`
 
 Runs automatically on:
+
 - Push to `main` branch (when source files change)
 - All pull requests
 - Manual trigger via workflow dispatch
 
 Checks performed:
+
 - Verifies `uv.lock` is up to date
 - Runs all pre-commit hooks (Ruff, ty, Prettier, Codespell, etc.)
 
@@ -282,11 +303,13 @@ Checks performed:
 **Workflow:** `run-tests.yml`
 
 Runs automatically on:
+
 - Push to `main` branch (when source files change)
 - All pull requests
 - Manual trigger via workflow dispatch
 
 Test matrix:
+
 - **OS**: Ubuntu, Windows
 - **Python**: 3.10
 
@@ -301,39 +324,31 @@ Runs automatically when a GitHub Release is published. Can also be triggered man
 Manual trigger only. Use this to test the publishing process before creating a real release.
 
 Both workflows:
+
 - Build the package using `uv build`
 - Validate the version format (rejects development versions like `0.1.0.dev1`)
 - Publish using PyPI trusted publishing (no API tokens needed)
 
-## Creating a Release
+Release Process
+---------------
 
-To create a new release and publish to PyPI:
+1. Ensure all tests pass on the `main` branch.
 
-1. **Ensure all tests pass** on the `main` branch
+2. Create and push a version tag:
 
-2. **Create and push a version tag:**
    ```bash
    git tag v0.1.0
    git push origin v0.1.0
    ```
 
-3. **Create a GitHub Release:**
-   - Go to [Releases](../../releases) on GitHub
-   - Click "Draft a new release"
-   - Select the tag you just created
-   - Add release notes describing the changes
-   - Click "Publish release"
+3. Create a GitHub release from the tag and add release notes. The `publish.yml` workflow will automatically build, validate, and publish the package to PyPI.
 
-4. **Automatic publishing:** The `publish.yml` workflow will automatically:
-   - Build the package
-   - Validate the version
-   - Publish to PyPI
-
-**Version format:** The version is derived from the Git tag using `uv-dynamic-versioning`. Tags must follow the format `vX.Y.Z` (e.g., `v0.1.0`, `v1.2.3`).
+The package version is derived automatically from the git tag by [uv-dynamic-versioning](https://github.com/nicoddemus/uv-dynamic-versioning). Tags must follow the format `vX.Y.Z` (e.g., `v0.1.0`, `v1.2.3`).
 
 **Testing the release process:** Use the "Publish to TestPyPI" workflow to verify everything works before creating a real release.
 
-## Building Packages
+Building Packages
+-----------------
 
 For local package building or manual publishing:
 
@@ -351,26 +366,18 @@ uv build
 
 This will create a `dist` folder containing an `authful_mcp_proxy X.X.X.tar.gz` and an `authful_mcp_proxy X.X.X-py3-none-any.whl` file.
 
-## Dependency Management and Lock Files
+Dependency Management and Lock Files
+-------------------------------------
 
 ### Why `uvx` Doesn't Use `uv.lock`
 
 When users run `uvx authful-mcp-proxy`, the `uv.lock` file is **not used**. This is by design and is standard Python packaging practice:
 
-1. **Wheels don't contain lock files**: When publishing to PyPI, the wheel format (preferred by installers) only contains:
-   - Package code
-   - Metadata from `pyproject.toml`
-   - Licenses
-   
-   The `uv.lock` file is deliberately excluded from wheels.
+1. **Wheels don't contain lock files**: When publishing to PyPI, the wheel format (preferred by installers) only contains package code, metadata from `pyproject.toml`, and licenses. The `uv.lock` file is deliberately excluded from wheels.
 
 2. **Lock files are development tools**: The `uv.lock` file ensures reproducible development environments when using `uv sync`. It's not part of the PEP 517/621 distribution metadata standard.
 
-3. **uvx creates ephemeral environments**: When running `uvx authful-mcp-proxy`:
-   - Downloads the package from PyPI (usually the wheel)
-   - Creates a temporary virtual environment
-   - Resolves dependencies from package metadata (derived from `pyproject.toml`)
-   - No mechanism exists to read or use lock files from the installed package
+3. **uvx creates ephemeral environments**: When running `uvx authful-mcp-proxy`, it downloads the package from PyPI, creates a temporary virtual environment, and resolves dependencies from package metadata (derived from `pyproject.toml`). No mechanism exists to read or use lock files from the installed package.
 
 ### Ensuring Compatibility for `uvx` Users
 
@@ -383,11 +390,7 @@ dependencies = [
 ]
 ```
 
-These constraints:
-- ✅ Are included in the wheel metadata
-- ✅ Are respected by all package installers (uvx, pip, poetry, etc.)
-- ✅ Prevent breaking changes from transitive dependencies
-- ✅ Follow standard Python packaging best practices
+These constraints are included in the wheel metadata and respected by all package installers (uvx, pip, poetry, etc.), preventing breaking changes from transitive dependencies.
 
 ### When to Update `uv.lock`
 
