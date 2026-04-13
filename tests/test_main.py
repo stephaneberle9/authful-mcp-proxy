@@ -139,6 +139,104 @@ class TestCLI:
 
         assert args.no_banner is True
 
+    def test_cli_transport_default_is_stdio(self):
+        """Test that transport defaults to stdio when not specified."""
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+            args = cli()
+
+        assert args.transport == "stdio"
+
+    def test_cli_transport_stdio_explicit(self):
+        """Test explicit --transport stdio."""
+        test_args = ["http://backend.example.com/mcp", "--transport", "stdio"]
+
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+
+        assert args.transport == "stdio"
+
+    def test_cli_transport_http(self):
+        """Test --transport http."""
+        test_args = ["http://backend.example.com/mcp", "--transport", "http"]
+
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+
+        assert args.transport == "http"
+
+    def test_cli_transport_env_var(self):
+        """Test MCP_TRANSPORT environment variable fallback."""
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+            with patch.dict(os.environ, {"MCP_TRANSPORT": "http"}):
+                args = cli()
+
+        assert args.transport == "http"
+
+    def test_cli_transport_cli_overrides_env_var(self):
+        """Test that --transport takes precedence over MCP_TRANSPORT env var."""
+        test_args = ["http://backend.example.com/mcp", "--transport", "stdio"]
+
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            with patch.dict(os.environ, {"MCP_TRANSPORT": "http"}):
+                args = cli()
+
+        assert args.transport == "stdio"
+
+    def test_cli_host_arg(self):
+        """Test --host argument."""
+        test_args = [
+            "http://backend.example.com/mcp",
+            "--transport",
+            "http",
+            "--host",
+            "127.0.0.1",
+        ]
+
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+
+        assert args.host == "127.0.0.1"
+
+    def test_cli_port_arg(self):
+        """Test --port argument is parsed as integer."""
+        test_args = [
+            "http://backend.example.com/mcp",
+            "--transport",
+            "http",
+            "--port",
+            "9000",
+        ]
+
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+
+        assert args.port == 9000
+
+    def test_cli_host_env_var(self):
+        """Test MCP_HOST environment variable fallback."""
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+            with patch.dict(os.environ, {"MCP_HOST": "192.168.1.1"}):
+                args = cli()
+
+        assert args.host == "192.168.1.1"
+
+    def test_cli_port_env_var(self):
+        """Test MCP_PORT environment variable fallback is converted to int."""
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+            with patch.dict(os.environ, {"MCP_PORT": "9000"}):
+                args = cli()
+
+        assert args.port == 9000
+
+    def test_cli_host_port_none_by_default(self):
+        """Test that host and port are None when not provided (FastMCP uses its own defaults)."""
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+            with patch.dict(os.environ, {}, clear=True):
+                args = cli()
+
+        assert args.host is None
+        assert args.port is None
+
 
 class TestGetLogLevelName:
     """Test get_log_level_name function."""

@@ -40,7 +40,7 @@ def cli():
         Namespace: Parsed arguments with all configuration options.
     """
     parser = argparse.ArgumentParser(
-        description=f"Authful Remote-HTTP-to-Local-stdio MCP Proxy (version {__version__})"
+        description=f"Authful MCP Proxy — bridges OIDC-protected remote MCP servers to local or web clients (version {__version__})"
     )
 
     # Proxy server arguments
@@ -55,6 +55,32 @@ def cli():
         "--no-banner",
         action="store_true",
         help="Don't show the proxy server banner",
+    )
+
+    # Transport options
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default=None,
+        help="Transport to serve on. "
+        "'stdio' (default): proxy is launched as a local process by the MCP client "
+        "(Claude Desktop, Claude Code via 'claude mcp add --transport stdio', Cursor, Windsurf, etc.). "
+        "'http': proxy runs as a standalone HTTP server that clients connect to by URL "
+        "(e.g. Claude Code via 'claude mcp add --transport http <name> <url>'). "
+        "Can also be set via MCP_TRANSPORT env var.",
+    )
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="Host address to bind to when using HTTP transport "
+        "(can also be set via MCP_HOST env var, default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Port to listen on when using HTTP transport "
+        "(can also be set via MCP_PORT env var, default: 8000)",
     )
 
     # OIDC options
@@ -93,6 +119,13 @@ def cli():
     # Fallback to environment variables (CLI args take precedence)
     if not args.mcp_backend_url:
         args.mcp_backend_url = os.getenv("MCP_BACKEND_URL")
+    if not args.transport:
+        args.transport = os.getenv("MCP_TRANSPORT") or "stdio"
+    if not args.host:
+        args.host = os.getenv("MCP_HOST")
+    if not args.port:
+        port_env = os.getenv("MCP_PORT")
+        args.port = int(port_env) if port_env else None
     if not args.oidc_issuer_url:
         args.oidc_issuer_url = os.getenv("OIDC_ISSUER_URL")
     if not args.oidc_client_id:
@@ -252,13 +285,22 @@ def main():
             redirect_url=args.oidc_redirect_url,
         )
 
+        # Build transport kwargs - only pass host/port for HTTP transport
+        transport_kwargs: dict = {"log_level": get_log_level_name(args)}
+        if args.transport == "http":
+            if args.host:
+                transport_kwargs["host"] = args.host
+            if args.port:
+                transport_kwargs["port"] = args.port
+
         # Start the MCP proxy
         asyncio.run(
             mcp_proxy.run_async(
                 backend_url=args.mcp_backend_url,
                 oidc_config=oidc_config,
+                transport=args.transport,
                 show_banner=not args.no_banner,
-                log_level=get_log_level_name(args),
+                **transport_kwargs,
             )
         )
     except Exception as e:

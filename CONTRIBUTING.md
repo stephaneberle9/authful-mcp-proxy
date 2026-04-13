@@ -8,8 +8,10 @@ Contributing
 - [Running the Server](#running-the-server)
   - [Inside dev environment](#inside-dev-environment)
   - [Outside dev environment](#outside-dev-environment)
+  - [As Web Connector Proxy (HTTP Transport)](#as-web-connector-proxy-http-transport)
   - [With MCP Inspector](#with-mcp-inspector)
   - [With Claude Desktop](#with-claude-desktop)
+  - [With Claude Code](#with-claude-code)
   - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
 - [Code Quality](#code-quality)
   - [Enable automatic execution on git commit](#enable-automatic-execution-on-git-commit)
@@ -89,7 +91,29 @@ uv run --env-file /path/to/authful-mcp-proxy/.env --project "/path/to/authful-mc
 uv run --env-file /path/to/authful-mcp-proxy/.env --with-editable "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
 ```
 
+### As Web Connector Proxy (HTTP Transport)
+
+Run the dev build as a persistent HTTP server instead of the default stdio transport:
+
+```bash
+# Activate virtual environment
+.venv\Scripts\activate  # Windows
+source ./.venv/bin/activate  # Linux/macOS
+
+# Run with HTTP transport (binds to localhost:8000 by default)
+authful-mcp-proxy --transport http --port 8000 \
+  --oidc-issuer-url https://auth.example.com \
+  --oidc-client-id my-client-id \
+  https://mcp-backend.example.com/mcp
+# or
+uv run --env-file .env authful-mcp-proxy --transport http --port 8000
+```
+
+The proxy authenticates via browser on first run, then serves MCP over HTTP at `http://localhost:8000/mcp`. Connect any MCP client to that URL while the server is running.
+
 ### With MCP Inspector
+
+**Stdio (inspector launches the proxy):**
 
 Create an `mcp.json` file containing:
 
@@ -131,6 +155,14 @@ In your browser, connect to your MCP proxy server, authenticate and use the tool
 - Sign up/sign in and approve required scopes as needed
 - List tools of backend MCP server: `Tools` > `List Tools`
 - Find MCP proxy server logs under `Server Notifications`
+
+**HTTP (connecting to a running proxy):**
+
+Start the proxy in HTTP mode first (see [As Web Connector Proxy](#as-web-connector-proxy-http-transport)), then point the inspector directly at it:
+
+```bash
+npx -y @modelcontextprotocol/inspector http://localhost:8000/mcp
+```
 
 ### With Claude Desktop
 
@@ -178,6 +210,36 @@ If an error popup appears, open the MCP server logs to diagnose the issue:
 - **macOS**: `~/Library/Logs/Claude/mcp-server-authful-mcp-proxy.log`
 
 Alternatively, go to `Settings` > `Developer` > select `authful-mcp-proxy` > `Open Logs Folder`.
+
+### With Claude Code
+
+**Stdio (Claude Code launches the proxy as a subprocess):**
+
+```bash
+claude mcp add --transport stdio authful-mcp-proxy -- \
+  uv run --with-editable /path/to/authful-mcp-proxy authful-mcp-proxy \
+  --oidc-issuer-url https://auth.company.com \
+  --oidc-client-id your-client-id \
+  https://mcp-backend.company.com/mcp
+```
+
+Or using an `.env` file for credentials:
+
+```bash
+claude mcp add --transport stdio authful-mcp-proxy -- \
+  uv run --env-file /path/to/authful-mcp-proxy/.env \
+  --with-editable /path/to/authful-mcp-proxy \
+  authful-mcp-proxy \
+  https://mcp-backend.company.com/mcp
+```
+
+**HTTP (connecting to a running dev proxy):**
+
+Start the proxy in HTTP mode first (see [As Web Connector Proxy](#as-web-connector-proxy-http-transport)), then register it:
+
+```bash
+claude mcp add --transport http authful-mcp-proxy http://localhost:8000/mcp
+```
 
 ### With Minimal Token-Validating MCP Backend Example
 
@@ -385,7 +447,7 @@ To ensure users get compatible dependency versions when running `uvx authful-mcp
 
 ```toml
 dependencies = [
-    "fastmcp>=2.14.0,<3.0.0",  # Prevents incompatible fastmcp 3.x
+    "fastmcp>=3.0.0",
     "py-key-value-aio[disk]>=0.3.0",  # Explicitly requires disk extra
 ]
 ```
