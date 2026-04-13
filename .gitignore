@@ -28,3 +28,6 @@ htmlcov/
 
 # VSCode settings
 .vscode/PythonImportHelper-v2-Completion.json
+
+# Claude Code local settings (tool permissions, personal overrides — not shared)
+.claude/settings.local.json
