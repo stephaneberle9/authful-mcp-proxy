@@ -62,24 +62,21 @@ async def run_async(
     # Create a client that authenticates (once) with the configured OIDC auth provider
     # and connects to the backend MCP server
     async with Client(transport=backend_url, auth=auth) as authenticated_client:
-        # Get server info from the authenticated client to relay it accurately
-        # If the client is connected, initialize_result will be populated
-        init_result = authenticated_client.initialize_result
-        server_info = getattr(init_result, "serverInfo", None)
-
-        # Extract only properties supported by FastMCP.__init__
-        proxy_kwargs = {}
-        if server_info:
-            proxy_kwargs["name"] = getattr(server_info, "name", None)
-            proxy_kwargs["version"] = getattr(server_info, "version", None)
-            # Map camelCase from MCP to snake_case for FastMCP
-            proxy_kwargs["website_url"] = getattr(server_info, "websiteUrl", None)
-            proxy_kwargs["icons"] = getattr(server_info, "icons", None)
-
-        if init_result:
-            # Only relay instructions if they are set
-            instructions = getattr(init_result, "instructions", None)
-            if instructions:
+        # Relay backend server identity so the proxy appears transparent to MCP clients:
+        # name/version/website_url/icons shown in Claude Desktop's connector list;
+        # instructions influence how the LLM selects and uses the server's tools.
+        proxy_kwargs: dict[str, Any] = {}
+        if init := authenticated_client.initialize_result:
+            if info := getattr(init, "serverInfo", None):
+                if name := getattr(info, "name", None):
+                    proxy_kwargs["name"] = name
+                if version := getattr(info, "version", None):
+                    proxy_kwargs["version"] = version
+                if website_url := getattr(info, "websiteUrl", None):
+                    proxy_kwargs["website_url"] = website_url
+                if icons := getattr(info, "icons", None):
+                    proxy_kwargs["icons"] = icons
+            if instructions := getattr(init, "instructions", None):
                 proxy_kwargs["instructions"] = instructions
 
         # Create FastMCP proxy server that reuses the connected session for all requests
