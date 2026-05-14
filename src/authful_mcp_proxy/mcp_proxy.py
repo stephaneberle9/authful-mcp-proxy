@@ -72,24 +72,24 @@ async def run_async(
         redirect_url=oidc_config.redirect_url,
     )
 
-    # Connect once to fetch server info for accurate relay, then close the connection.
-    proxy_kwargs = {}
-    async with Client(transport=backend_url, auth=auth) as info_client:
-        init_result = info_client.initialize_result
-        server_info = getattr(init_result, "serverInfo", None)
-
-        # Extract only properties supported by FastMCP.__init__
-        if server_info:
-            proxy_kwargs["name"] = getattr(server_info, "name", None)
-            proxy_kwargs["version"] = getattr(server_info, "version", None)
-            # Map camelCase from MCP to snake_case for FastMCP
-            proxy_kwargs["website_url"] = getattr(server_info, "websiteUrl", None)
-            proxy_kwargs["icons"] = getattr(server_info, "icons", None)
-
-        if init_result:
-            # Only relay instructions if they are set
-            instructions = getattr(init_result, "instructions", None)
-            if instructions:
+    # Create a client that authenticates (once) with the configured OIDC auth provider
+    # and connects to the backend MCP server
+    async with Client(transport=backend_url, auth=auth) as authenticated_client:
+        # Relay backend server identity so the proxy appears transparent to MCP clients:
+        # name/version/website_url/icons shown in Claude Desktop's connector list;
+        # instructions influence how the LLM selects and uses the server's tools.
+        proxy_kwargs: dict[str, Any] = {}
+        if init := authenticated_client.initialize_result:
+            if info := getattr(init, "serverInfo", None):
+                if name := getattr(info, "name", None):
+                    proxy_kwargs["name"] = name
+                if version := getattr(info, "version", None):
+                    proxy_kwargs["version"] = version
+                if website_url := getattr(info, "websiteUrl", None):
+                    proxy_kwargs["website_url"] = website_url
+                if icons := getattr(info, "icons", None):
+                    proxy_kwargs["icons"] = icons
+            if instructions := getattr(init, "instructions", None):
                 proxy_kwargs["instructions"] = instructions
 
     # Pass a disconnected client to create_proxy. FastMCP will call client.new() per
