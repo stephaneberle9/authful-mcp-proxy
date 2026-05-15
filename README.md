@@ -639,11 +639,11 @@ Run `uvx authsome-mcp-proxy --help` for the always-current list.
 # Credential Management
 
 Tokens obtained in **stdio mode** (the proxy's OAuth code flow) are
-cached in `~/.mcp-auth/authsome-mcp-proxy-<version>/` (where `<version>`
+cached in `~/.cache/authsome-mcp-proxy-<version>/` (where `<version>`
 is the installed package version) as a SQLite database:
 
 ```
-~/.mcp-auth/authsome-mcp-proxy-0.5.0/
+~/.cache/authsome-mcp-proxy-0.5.0/
   ├── cache.db
   ├── cache.db-shm
   └── cache.db-wal
@@ -653,10 +653,10 @@ To force re-authentication (switching accounts, expired tokens, etc.):
 
 ```bash
 # Linux / macOS
-rm -rf ~/.mcp-auth/authsome-mcp-proxy*
+rm -rf ~/.cache/authsome-mcp-proxy*
 
 # Windows
-rmdir /s %USERPROFILE%\.mcp-auth\authsome-mcp-proxy*
+rmdir /s %USERPROFILE%\.cache\authsome-mcp-proxy*
 ```
 
 In **web mode** the proxy doesn't cache its own tokens — downstream MCP
@@ -669,7 +669,7 @@ browser to populate the cache, then copy it over:
 
 ```bash
 # Linux / macOS
-scp -r ~/.mcp-auth/authsome-mcp-proxy-<version> user@server:~/.mcp-auth/
+scp -r ~/.cache/authsome-mcp-proxy-<version> user@server:~/.cache/
 ```
 
 Refresh tokens keep the cache valid for as long as the IdP allows. Add
@@ -685,7 +685,7 @@ connections.
 
 **`401 Unauthorized` from the upstream** — verify `OIDC_ISSUER_URL`
 matches the IdP your upstream validates against, check requested scopes,
-and clear the cache (`rm -rf ~/.mcp-auth/authsome-mcp-proxy*`) before
+and clear the cache (`rm -rf ~/.cache/authsome-mcp-proxy*`) before
 retrying. Run with `--debug` for token-level diagnostics.
 
 **`redirect_uri mismatch` from the IdP** — add the proxy's callback URL
