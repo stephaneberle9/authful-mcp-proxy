@@ -4,7 +4,10 @@ import logging
 import os
 from unittest.mock import patch
 
-from authful_mcp_proxy.__main__ import cli, get_log_level_name
+import pytest
+
+from authful_mcp_proxy.__main__ import build_proxy_config, cli, get_log_level_name
+from authful_mcp_proxy.config import DesktopConfig, WebConfig
 
 
 class TestCLI:
@@ -236,6 +239,326 @@ class TestCLI:
 
         assert args.host is None
         assert args.port is None
+
+
+class TestCLIWebModeFlags:
+    """Test parsing of the http-mode-only CLI flags + env-var fallbacks."""
+
+    def test_auth_provider_flag(self):
+        test_args = [
+            "http://backend",
+            "--transport",
+            "http",
+            "--auth-provider",
+            "aws-cognito",
+        ]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.auth_provider == "aws-cognito"
+
+    def test_auth_provider_env_var(self):
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+            with patch.dict(os.environ, {"AUTH_PROVIDER": "keycloak"}, clear=True):
+                args = cli()
+        assert args.auth_provider == "keycloak"
+
+    def test_base_url_flag_and_env(self):
+        test_args = ["http://backend", "--base-url", "https://mcp.example.com"]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.base_url == "https://mcp.example.com"
+
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+            with patch.dict(
+                os.environ, {"BASE_URL": "https://env.example.com"}, clear=True
+            ):
+                args = cli()
+        assert args.base_url == "https://env.example.com"
+
+    def test_provider_specific_flags(self):
+        test_args = [
+            "http://backend",
+            "--cognito-user-pool-id",
+            "us-east-1_abc",
+            "--cognito-aws-region",
+            "us-east-1",
+            "--azure-tenant-id",
+            "tid",
+            "--azure-identifier-uri",
+            "api://example",
+            "--audience",
+            "mcp-server",
+        ]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.cognito_user_pool_id == "us-east-1_abc"
+        assert args.cognito_aws_region == "us-east-1"
+        assert args.azure_tenant_id == "tid"
+        assert args.azure_identifier_uri == "api://example"
+        assert args.audience == "mcp-server"
+
+    def test_provider_specific_env_vars(self):
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+            with patch.dict(
+                os.environ,
+                {
+                    "COGNITO_USER_POOL_ID": "eu-central-1_xyz",
+                    "COGNITO_AWS_REGION": "eu-central-1",
+                    "AZURE_TENANT_ID": "env-tid",
+                    "AZURE_IDENTIFIER_URI": "api://env",
+                    "AUDIENCE": "env-aud",
+                },
+                clear=True,
+            ):
+                args = cli()
+        assert args.cognito_user_pool_id == "eu-central-1_xyz"
+        assert args.cognito_aws_region == "eu-central-1"
+        assert args.azure_tenant_id == "env-tid"
+        assert args.azure_identifier_uri == "api://env"
+        assert args.audience == "env-aud"
+
+    def test_outbound_auth_flags(self):
+        test_args = [
+            "http://backend",
+            "--outbound-auth",
+            "oauth-client-credentials",
+            "--outbound-client-id",
+            "ocid",
+            "--outbound-client-secret",
+            "osec",
+            "--outbound-token-url",
+            "https://idp.example.com/token",
+        ]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.outbound_auth == "oauth-client-credentials"
+        assert args.outbound_client_id == "ocid"
+        assert args.outbound_client_secret == "osec"
+        assert args.outbound_token_url == "https://idp.example.com/token"
+
+    def test_outbound_static_flags(self):
+        test_args = [
+            "http://backend",
+            "--outbound-auth",
+            "static",
+            "--outbound-header-name",
+            "X-API-Key",
+            "--outbound-header-value",
+            "abc123",
+        ]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.outbound_auth == "static"
+        assert args.outbound_header_name == "X-API-Key"
+        assert args.outbound_header_value == "abc123"
+
+    def test_outbound_env_vars(self):
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+            with patch.dict(
+                os.environ,
+                {
+                    "OUTBOUND_AUTH": "static",
+                    "OUTBOUND_HEADER_NAME": "X-Auth",
+                    "OUTBOUND_HEADER_VALUE": "secret",
+                    "OUTBOUND_CLIENT_ID": "x",
+                    "OUTBOUND_CLIENT_SECRET": "y",
+                    "OUTBOUND_TOKEN_URL": "https://t",
+                },
+                clear=True,
+            ):
+                args = cli()
+        assert args.outbound_auth == "static"
+        assert args.outbound_header_name == "X-Auth"
+        assert args.outbound_header_value == "secret"
+        assert args.outbound_client_id == "x"
+        assert args.outbound_client_secret == "y"
+        assert args.outbound_token_url == "https://t"
+
+
+def _parse(test_args: list[str]):
+    with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch.dict(os.environ, {}, clear=True):
+            return cli()
+
+
+class TestBuildProxyConfig:
+    """build_proxy_config picks DesktopConfig vs WebConfig based on transport."""
+
+    def test_stdio_builds_desktop_config(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--oidc-issuer-url",
+                "https://auth.example.com",
+                "--oidc-client-id",
+                "cid",
+                "--oidc-client-secret",
+                "csec",
+                "--oidc-scopes",
+                "openid",
+                "--oidc-redirect-url",
+                "http://localhost:8080/callback",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, DesktopConfig)
+        assert config.issuer_url == "https://auth.example.com"
+        assert config.client_id == "cid"
+        assert config.client_secret == "csec"
+        assert config.scopes == "openid"
+        assert config.redirect_url == "http://localhost:8080/callback"
+
+    def test_http_requires_base_url(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+            ]
+        )
+        with pytest.raises(ValueError, match="--base-url"):
+            build_proxy_config(args)
+
+    def test_http_requires_auth_provider(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+            ]
+        )
+        with pytest.raises(ValueError, match="--auth-provider"):
+            build_proxy_config(args)
+
+    def test_http_builds_web_config_for_keycloak(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+                "--audience",
+                "mcp-server",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.auth_provider == "keycloak"
+        assert config.base_url == "https://mcp.example.com"
+        assert config.issuer_url == "https://kc/realms/r"
+        assert config.audience == "mcp-server"
+        # Defaults for outbound when nothing else is set
+        assert config.outbound_auth == "forward"
+        assert config.outbound_header_name == "Authorization"
+
+    def test_http_builds_web_config_for_aws_cognito(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "aws-cognito",
+                "--oidc-client-id",
+                "cid",
+                "--oidc-client-secret",
+                "csec",
+                "--cognito-user-pool-id",
+                "us-east-1_abc",
+                "--cognito-aws-region",
+                "us-east-1",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.auth_provider == "aws-cognito"
+        assert config.client_id == "cid"
+        assert config.cognito_user_pool_id == "us-east-1_abc"
+        assert config.cognito_aws_region == "us-east-1"
+
+    def test_http_builds_web_config_with_oauth_cc_outbound(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+                "--outbound-auth",
+                "oauth-client-credentials",
+                "--outbound-client-id",
+                "ocid",
+                "--outbound-client-secret",
+                "osec",
+                "--outbound-token-url",
+                "https://idp/token",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.outbound_auth == "oauth-client-credentials"
+        assert config.outbound_token_url == "https://idp/token"
+
+    def test_http_builds_web_config_with_static_outbound(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+                "--outbound-auth",
+                "static",
+                "--outbound-header-name",
+                "X-API-Key",
+                "--outbound-header-value",
+                "abc123",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.outbound_auth == "static"
+        assert config.outbound_header_name == "X-API-Key"
+        assert config.outbound_header_value == "abc123"
+
+    def test_http_propagates_post_init_validation_errors(self):
+        """Per-provider field validation lives in WebConfig.__post_init__ —
+        build_proxy_config surfaces those ValueErrors transparently."""
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "aws-cognito",
+                # missing client_id, client_secret, user-pool-id, region
+            ]
+        )
+        with pytest.raises(ValueError, match="aws-cognito"):
+            build_proxy_config(args)
 
 
 class TestGetLogLevelName:
