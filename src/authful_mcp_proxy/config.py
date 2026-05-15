@@ -129,6 +129,21 @@ class WebConfig:
             -- required for ``static``. E.g. ``"Bearer eyJ..."`` for a bearer
             token, or a bare API key paired with
             ``outbound_header_name="X-API-Key"``.
+
+    Server identity (advertised to downstream MCP clients):
+        In stdio mode the proxy connects once at startup and relays the
+        upstream's ``serverInfo`` so the proxy appears transparent. In web
+        mode that startup relay isn't always possible (``outbound_auth=
+        'forward'`` has no inbound session yet) so these fields let the
+        operator hard-code what downstream clients should see. Each maps
+        directly to the matching ``create_proxy()`` kwarg.
+
+        server_name: Display name (e.g. ``"ANALYZE"``). Without this, the
+            proxy falls back to FastMCP's auto-generated ``FastMCPProxy-xxxx``.
+        server_version: Display version string.
+        server_instructions: Instructions the LLM sees alongside the
+            tool catalog -- influences tool selection.
+        server_website_url: Project URL shown in client UIs.
     """
 
     auth_provider: AuthProvider
@@ -156,6 +171,12 @@ class WebConfig:
     outbound_token_url: str | None = None
     outbound_header_name: str = "Authorization"
     outbound_header_value: str | None = None
+
+    # server identity advertised to downstream MCP clients
+    server_name: str | None = None
+    server_version: str | None = None
+    server_instructions: str | None = None
+    server_website_url: str | None = None
 
     def __post_init__(self) -> None:
         self._validate_inbound()

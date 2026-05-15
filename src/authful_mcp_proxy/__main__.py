@@ -231,6 +231,34 @@ def cli() -> argparse.Namespace:
         "--outbound-header-name X-API-Key)",
     )
 
+    # Web-mode-only server-identity options
+    parser.add_argument(
+        "--server-name",
+        default=None,
+        help="Display name advertised to downstream MCP clients (e.g. 'ANALYZE'). "
+        "Without this, FastMCP auto-generates 'FastMCPProxy-xxxx'. "
+        "Can also be set via SERVER_NAME env var.",
+    )
+    parser.add_argument(
+        "--server-version",
+        default=None,
+        help="Display version string advertised to downstream MCP clients "
+        "(can also be set via SERVER_VERSION env var)",
+    )
+    parser.add_argument(
+        "--server-instructions",
+        default=None,
+        help="Instructions advertised alongside the tool catalog -- influences "
+        "how the LLM selects and uses the upstream's tools "
+        "(can also be set via SERVER_INSTRUCTIONS env var)",
+    )
+    parser.add_argument(
+        "--server-website-url",
+        default=None,
+        help="Project URL shown in downstream MCP client UIs "
+        "(can also be set via SERVER_WEBSITE_URL env var)",
+    )
+
     # Logging options
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--silent", action="store_true", help="Show only error messages")
@@ -277,6 +305,10 @@ def _apply_env_fallbacks(args: argparse.Namespace) -> None:
         ("outbound_token_url", "OUTBOUND_TOKEN_URL"),
         ("outbound_header_name", "OUTBOUND_HEADER_NAME"),
         ("outbound_header_value", "OUTBOUND_HEADER_VALUE"),
+        ("server_name", "SERVER_NAME"),
+        ("server_version", "SERVER_VERSION"),
+        ("server_instructions", "SERVER_INSTRUCTIONS"),
+        ("server_website_url", "SERVER_WEBSITE_URL"),
     )
     for attr, env_name in env_fallbacks:
         if not getattr(args, attr):
@@ -348,6 +380,10 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
         outbound_token_url=args.outbound_token_url,
         outbound_header_name=args.outbound_header_name or "Authorization",
         outbound_header_value=args.outbound_header_value,
+        server_name=args.server_name,
+        server_version=args.server_version,
+        server_instructions=args.server_instructions,
+        server_website_url=args.server_website_url,
     )
 
 

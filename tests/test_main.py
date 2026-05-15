@@ -352,6 +352,43 @@ class TestCLIWebModeFlags:
         assert args.outbound_header_name == "X-API-Key"
         assert args.outbound_header_value == "abc123"
 
+    def test_server_identity_flags(self):
+        test_args = [
+            "http://backend",
+            "--server-name",
+            "ANALYZE",
+            "--server-version",
+            "2.3.0",
+            "--server-instructions",
+            "Use these tools for traceability analysis.",
+            "--server-website-url",
+            "https://analyze.example.com",
+        ]
+        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.server_name == "ANALYZE"
+        assert args.server_version == "2.3.0"
+        assert args.server_instructions == "Use these tools for traceability analysis."
+        assert args.server_website_url == "https://analyze.example.com"
+
+    def test_server_identity_env_vars(self):
+        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+            with patch.dict(
+                os.environ,
+                {
+                    "SERVER_NAME": "ANALYZE",
+                    "SERVER_VERSION": "2.3.0",
+                    "SERVER_INSTRUCTIONS": "Env-supplied instructions.",
+                    "SERVER_WEBSITE_URL": "https://analyze.example.com",
+                },
+                clear=True,
+            ):
+                args = cli()
+        assert args.server_name == "ANALYZE"
+        assert args.server_version == "2.3.0"
+        assert args.server_instructions == "Env-supplied instructions."
+        assert args.server_website_url == "https://analyze.example.com"
+
     def test_outbound_env_vars(self):
         with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
             with patch.dict(
@@ -541,6 +578,58 @@ class TestBuildProxyConfig:
         assert config.outbound_auth == "static"
         assert config.outbound_header_name == "X-API-Key"
         assert config.outbound_header_value == "abc123"
+
+    def test_http_propagates_server_identity_fields(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+                "--server-name",
+                "ANALYZE",
+                "--server-version",
+                "2.3.0",
+                "--server-instructions",
+                "Use these tools for traceability analysis.",
+                "--server-website-url",
+                "https://analyze.example.com",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.server_name == "ANALYZE"
+        assert config.server_version == "2.3.0"
+        assert (
+            config.server_instructions == "Use these tools for traceability analysis."
+        )
+        assert config.server_website_url == "https://analyze.example.com"
+
+    def test_http_server_identity_fields_default_to_none(self):
+        args = _parse(
+            [
+                "http://backend",
+                "--transport",
+                "http",
+                "--base-url",
+                "https://mcp.example.com",
+                "--auth-provider",
+                "keycloak",
+                "--oidc-issuer-url",
+                "https://kc/realms/r",
+            ]
+        )
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.server_name is None
+        assert config.server_version is None
+        assert config.server_instructions is None
+        assert config.server_website_url is None
 
     def test_http_propagates_post_init_validation_errors(self):
         """Per-provider field validation lives in WebConfig.__post_init__ —

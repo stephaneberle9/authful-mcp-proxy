@@ -182,11 +182,86 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
         cp_args = mock_create_proxy.call_args
         assert cp_args.args[0] is proxy_client
         assert cp_args.kwargs["auth"] is sentinel_inbound
+        # No server-identity kwargs leak through when none were configured;
+        # FastMCP's defaults apply.
+        assert "name" not in cp_args.kwargs
+        assert "version" not in cp_args.kwargs
+        assert "instructions" not in cp_args.kwargs
+        assert "website_url" not in cp_args.kwargs
 
         # Transport is forced to http in web mode.
         mock_proxy_server.run_async.assert_called_once_with(
             transport="http", show_banner=False
         )
+
+
+@pytest.mark.asyncio
+async def test_run_async_web_forwards_server_identity_kwargs():
+    """Operator-configured server_name/version/instructions/website_url land on
+    create_proxy as the matching kwargs, so the proxy advertises them to
+    downstream MCP clients instead of FastMCP's auto-generated name."""
+    web_config = WebConfig(
+        auth_provider="keycloak",
+        base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+        server_name="ANALYZE",
+        server_version="2.3.0",
+        server_instructions="Use these tools for traceability analysis.",
+        server_website_url="https://analyze.example.com",
+    )
+
+    with (
+        patch(
+            "authful_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
+        ),
+        patch(
+            "authful_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
+        ),
+        patch("authful_mcp_proxy.mcp_proxy.Client"),
+        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+    ):
+        mock_proxy_server = AsyncMock()
+        mock_create_proxy.return_value = mock_proxy_server
+
+        await mcp_proxy.run_async("http://backend:8080", web_config, show_banner=False)
+
+        cp_kwargs = mock_create_proxy.call_args.kwargs
+        assert cp_kwargs["name"] == "ANALYZE"
+        assert cp_kwargs["version"] == "2.3.0"
+        assert cp_kwargs["instructions"] == "Use these tools for traceability analysis."
+        assert cp_kwargs["website_url"] == "https://analyze.example.com"
+
+
+@pytest.mark.asyncio
+async def test_run_async_web_omits_unset_server_identity_kwargs():
+    """When only some server-identity fields are set, only those are passed."""
+    web_config = WebConfig(
+        auth_provider="keycloak",
+        base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+        server_name="ANALYZE",  # only this one set
+    )
+
+    with (
+        patch(
+            "authful_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
+        ),
+        patch(
+            "authful_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
+        ),
+        patch("authful_mcp_proxy.mcp_proxy.Client"),
+        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+    ):
+        mock_proxy_server = AsyncMock()
+        mock_create_proxy.return_value = mock_proxy_server
+
+        await mcp_proxy.run_async("http://backend:8080", web_config, show_banner=False)
+
+        cp_kwargs = mock_create_proxy.call_args.kwargs
+        assert cp_kwargs["name"] == "ANALYZE"
+        assert "version" not in cp_kwargs
+        assert "instructions" not in cp_kwargs
+        assert "website_url" not in cp_kwargs
 
 
 @pytest.mark.asyncio

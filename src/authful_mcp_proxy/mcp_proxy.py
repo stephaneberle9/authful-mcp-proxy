@@ -107,17 +107,38 @@ async def _run_web(
     inbound_auth = build_inbound_auth(config)
     outbound_auth = build_outbound_auth(config)
 
-    # Server-identity relay is skipped in web mode. With outbound_auth='forward'
-    # there is no inbound session at startup so the call would fail; with the
-    # other outbound modes the proxy-owned credential may or may not be
-    # authorized to call initialize. Falling back to FastMCP defaults is the
-    # safe choice for now -- lazy on-first-request relay can be added later.
+    # Server-identity relay (the stdio path's pre-flight initialize handshake
+    # against the upstream) is skipped in web mode: with outbound_auth='forward'
+    # there is no inbound session yet, and with the other modes the proxy-owned
+    # credential may or may not be authorized to call initialize. Operators who
+    # want the proxy to appear transparent set server_name / server_version /
+    # etc. on the config; without them FastMCP falls back to its auto-generated
+    # FastMCPProxy-xxxx name.
+    proxy_kwargs = _server_identity_kwargs(config)
     proxy_client = Client(transport=backend_url, auth=outbound_auth)
-    mcp_proxy = create_proxy(proxy_client, auth=inbound_auth)
+    mcp_proxy = create_proxy(proxy_client, auth=inbound_auth, **proxy_kwargs)
 
     await mcp_proxy.run_async(
         transport="http", show_banner=show_banner, **transport_kwargs
     )
+
+
+def _server_identity_kwargs(config: WebConfig) -> dict[str, Any]:
+    """Collect operator-configured server-identity fields as create_proxy kwargs.
+
+    Only includes fields the operator actually set. Unset fields are omitted so
+    FastMCP's defaults apply.
+    """
+    kwargs: dict[str, Any] = {}
+    if config.server_name:
+        kwargs["name"] = config.server_name
+    if config.server_version:
+        kwargs["version"] = config.server_version
+    if config.server_instructions:
+        kwargs["instructions"] = config.server_instructions
+    if config.server_website_url:
+        kwargs["website_url"] = config.server_website_url
+    return kwargs
 
 
 def _relay_server_info(client: Client) -> dict[str, Any]:
