@@ -1,6 +1,6 @@
 """Inbound auth provider factory for the web (HTTP) transport.
 
-This module dispatches ``WebConfig.auth_provider`` to the matching FastMCP
+This module dispatches ``WebConfig.inbound_auth_provider`` to the matching FastMCP
 auth provider class. The proxy itself stays IdP-agnostic -- per-IdP quirks
 (Cognito's ``client_id`` claim validation, Azure's scope prefixing, Google's
 opaque-token handling, Keycloak's native DCR support, etc.) live inside
@@ -21,7 +21,7 @@ Two patterns are dispatched here:
 
 To add a new IdP:
 
-1. Add a literal to ``AuthProvider`` in :mod:`authful_mcp_proxy.config`.
+1. Add a literal to ``AuthProvider`` in :mod:`authsome_mcp_proxy.config`.
 2. Add the per-provider required fields to ``WebConfig`` and its
    ``__post_init__`` validation.
 3. Add a branch to :func:`build_inbound_auth`.
@@ -50,7 +50,7 @@ def _parse_scopes(scopes: str | None) -> list[str] | None:
 
 
 def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
-    """Instantiate the FastMCP auth provider matching ``config.auth_provider``.
+    """Instantiate the FastMCP auth provider matching ``config.inbound_auth_provider``.
 
     The returned provider is passed to FastMCP via the ``auth=`` argument
     on the server. For DCR-bridge providers (``oidc``/``aws-cognito``/
@@ -68,21 +68,21 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
         A FastMCP ``AuthProvider`` subclass instance.
 
     Raises:
-        ValueError: If ``config.auth_provider`` is unknown.
+        ValueError: If ``config.inbound_auth_provider`` is unknown.
     """
     scopes = _parse_scopes(config.scopes)
 
-    if config.auth_provider == "keycloak":
+    if config.inbound_auth_provider == "keycloak":
         # RemoteAuthProvider: no client_id/secret; MCP client DCRs with Keycloak.
         assert config.issuer_url is not None
         return KeycloakAuthProvider(
             realm_url=config.issuer_url,
-            base_url=config.base_url,
+            base_url=config.proxy_base_url,
             required_scopes=scopes,
             audience=config.audience,
         )
 
-    if config.auth_provider == "oidc":
+    if config.inbound_auth_provider == "oidc":
         # DCR-bridge generic OIDC: derive the discovery URL from the issuer.
         # Use this for older Keycloak versions and any non-DCR OIDC IdP.
         assert config.issuer_url is not None
@@ -94,10 +94,10 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             client_secret=config.client_secret,
             audience=config.audience,
             required_scopes=scopes,
-            base_url=config.base_url,
+            base_url=config.proxy_base_url,
         )
 
-    if config.auth_provider == "aws-cognito":
+    if config.inbound_auth_provider == "aws-cognito":
         assert config.client_id is not None
         assert config.client_secret is not None
         assert config.cognito_user_pool_id is not None
@@ -108,19 +108,19 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             client_id=config.client_id,
             client_secret=config.client_secret,
             required_scopes=scopes,
-            base_url=config.base_url,
+            base_url=config.proxy_base_url,
         )
 
-    if config.auth_provider == "google":
+    if config.inbound_auth_provider == "google":
         assert config.client_id is not None
         return GoogleProvider(
             client_id=config.client_id,
             client_secret=config.client_secret,
             required_scopes=scopes,
-            base_url=config.base_url,
+            base_url=config.proxy_base_url,
         )
 
-    if config.auth_provider == "azure":
+    if config.inbound_auth_provider == "azure":
         assert config.client_id is not None
         assert config.azure_tenant_id is not None
         assert scopes is not None
@@ -130,10 +130,10 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             tenant_id=config.azure_tenant_id,
             identifier_uri=config.azure_identifier_uri,
             required_scopes=scopes,
-            base_url=config.base_url,
+            base_url=config.proxy_base_url,
         )
 
     raise ValueError(
-        f"Unknown auth_provider {config.auth_provider!r}; supported: "
+        f"Unknown inbound_auth_provider {config.inbound_auth_provider!r}; supported: "
         "oidc, keycloak, aws-cognito, google, azure"
     )

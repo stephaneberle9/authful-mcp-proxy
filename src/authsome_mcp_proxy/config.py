@@ -85,8 +85,8 @@ class WebConfig:
     """Configuration for http (web connector) transport.
 
     Inbound (downstream MCP client -> proxy):
-        auth_provider: Which inbound auth provider to use.
-        base_url: Publicly reachable URL of the proxy (e.g.
+        inbound_auth_provider: Which inbound auth provider to use.
+        proxy_base_url: Publicly reachable URL of the proxy (e.g.
             ``https://mcp.example.com``). Used by every provider to advertise
             its authorization/token/JWKS endpoints to downstream MCP clients
             via the OAuth 2.0 protected-resource metadata document.
@@ -138,16 +138,16 @@ class WebConfig:
         operator hard-code what downstream clients should see. Each maps
         directly to the matching ``create_proxy()`` kwarg.
 
-        server_name: Display name (e.g. ``"ANALYZE"``). Without this, the
+        proxy_name: Display name (e.g. ``"ANALYZE"``). Without this, the
             proxy falls back to FastMCP's auto-generated ``FastMCPProxy-xxxx``.
-        server_version: Display version string.
-        server_instructions: Instructions the LLM sees alongside the
+        proxy_version: Display version string.
+        proxy_instructions: Instructions the LLM sees alongside the
             tool catalog -- influences tool selection.
-        server_website_url: Project URL shown in client UIs.
+        proxy_website_url: Project URL shown in client UIs.
     """
 
-    auth_provider: AuthProvider
-    base_url: str
+    inbound_auth_provider: AuthProvider
+    proxy_base_url: str
     client_id: str | None = None
     client_secret: str | None = None
     scopes: str | None = None
@@ -173,27 +173,27 @@ class WebConfig:
     outbound_header_value: str | None = None
 
     # server identity advertised to downstream MCP clients
-    server_name: str | None = None
-    server_version: str | None = None
-    server_instructions: str | None = None
-    server_website_url: str | None = None
+    proxy_name: str | None = None
+    proxy_version: str | None = None
+    proxy_instructions: str | None = None
+    proxy_website_url: str | None = None
 
     def __post_init__(self) -> None:
         self._validate_inbound()
         self._validate_outbound()
 
     def _validate_inbound(self) -> None:
-        if self.auth_provider == "keycloak":
+        if self.inbound_auth_provider == "keycloak":
             if not self.issuer_url:
-                raise ValueError("auth_provider='keycloak' requires issuer_url")
+                raise ValueError("inbound_auth_provider='keycloak' requires issuer_url")
             # KeycloakAuthProvider is a RemoteAuthProvider: no client_id /
             # client_secret needed (the MCP client DCRs directly with Keycloak).
-        elif self.auth_provider == "oidc":
+        elif self.inbound_auth_provider == "oidc":
             if not self.issuer_url:
-                raise ValueError("auth_provider='oidc' requires issuer_url")
+                raise ValueError("inbound_auth_provider='oidc' requires issuer_url")
             if not self.client_id:
-                raise ValueError("auth_provider='oidc' requires client_id")
-        elif self.auth_provider == "aws-cognito":
+                raise ValueError("inbound_auth_provider='oidc' requires client_id")
+        elif self.inbound_auth_provider == "aws-cognito":
             missing = [
                 name
                 for name, value in (
@@ -206,19 +206,21 @@ class WebConfig:
             ]
             if missing:
                 raise ValueError(
-                    f"auth_provider='aws-cognito' requires {', '.join(missing)}"
+                    f"inbound_auth_provider='aws-cognito' requires {', '.join(missing)}"
                 )
-        elif self.auth_provider == "google":
+        elif self.inbound_auth_provider == "google":
             if not self.client_id:
-                raise ValueError("auth_provider='google' requires client_id")
-        elif self.auth_provider == "azure":
+                raise ValueError("inbound_auth_provider='google' requires client_id")
+        elif self.inbound_auth_provider == "azure":
             if not self.client_id:
-                raise ValueError("auth_provider='azure' requires client_id")
+                raise ValueError("inbound_auth_provider='azure' requires client_id")
             if not self.azure_tenant_id:
-                raise ValueError("auth_provider='azure' requires azure_tenant_id")
+                raise ValueError(
+                    "inbound_auth_provider='azure' requires azure_tenant_id"
+                )
             if not self.scopes:
                 # AzureProvider's required_scopes is a mandatory list[str].
-                raise ValueError("auth_provider='azure' requires scopes")
+                raise ValueError("inbound_auth_provider='azure' requires scopes")
 
     def _validate_outbound(self) -> None:
         if self.outbound_auth == "oauth-client-credentials":

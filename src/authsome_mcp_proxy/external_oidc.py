@@ -51,7 +51,7 @@ __all__ = ["ExternalOIDCAuth"]
 logger = logging.getLogger(__name__)
 
 # Add file handler for token refresh logging
-# Log file will be created in the cache directory (e.g., ~/.mcp-auth/authful-mcp-proxy-dev/)
+# Log file will be created in the cache directory (e.g., ~/.mcp-auth/authsome-mcp-proxy-dev/)
 # Note: Cache directory is determined later during auth initialization, so we'll set this up there
 _token_refresh_log_handler = None
 
@@ -242,7 +242,7 @@ class ExternalOIDCAuth(httpx.Auth):
             client_secret: Static OAuth client secret (optional for public OIDC clients that don't require any such)
             scopes: OAuth scopes to request (default: ["openid"]). Can be a
             space-separated string or a list of strings.
-            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp-auth/authful-mcp-proxy-<version>/)
+            token_storage_cache_dir: Directory for token storage cache (default: ~/.mcp-auth/authsome-mcp-proxy-<version>/)
             redirect_url: Localhost URL for OAuth redirect (default: http://localhost:8080/auth/callback)
         """
         # Validate required parameters
@@ -276,7 +276,7 @@ class ExternalOIDCAuth(httpx.Auth):
         )
         cache_dir = (
             token_storage_cache_dir
-            or Path.home() / ".mcp-auth" / f"authful-mcp-proxy-{version_suffix}"
+            or Path.home() / ".mcp-auth" / f"authsome-mcp-proxy-{version_suffix}"
         )
         disk_store = DiskStore(directory=cache_dir)
         storage = TokenStorageAdapter(async_key_value=disk_store, server_url=issuer_url)

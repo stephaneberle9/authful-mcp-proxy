@@ -1,4 +1,4 @@
-"""Tests for authful_mcp_proxy.outbound_auth — outbound auth mode factory.
+"""Tests for authsome_mcp_proxy.outbound_auth — outbound auth mode factory.
 
 These tests exercise the httpx.Auth classes directly without spinning up a
 FastMCP server, by:
@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from authful_mcp_proxy.config import WebConfig
-from authful_mcp_proxy.outbound_auth import (
+from authsome_mcp_proxy.config import WebConfig
+from authsome_mcp_proxy.outbound_auth import (
     ForwardSessionTokenAuth,
     OAuthClientCredentialsAuth,
     StaticHeaderAuth,
@@ -28,8 +28,8 @@ from authful_mcp_proxy.outbound_auth import (
 
 def _base_keycloak_kwargs() -> dict:
     return {
-        "auth_provider": "keycloak",
-        "base_url": "https://mcp.example.com",
+        "inbound_auth_provider": "keycloak",
+        "proxy_base_url": "https://mcp.example.com",
         "issuer_url": "https://kc.example.com/realms/r",
     }
 
@@ -93,7 +93,7 @@ class TestForwardSessionTokenAuth:
     async def test_injects_bearer_token_when_session_token_present(self):
         mock_token = MagicMock(token="session-token-xyz")
         with patch(
-            "authful_mcp_proxy.outbound_auth.get_access_token",
+            "authsome_mcp_proxy.outbound_auth.get_access_token",
             return_value=mock_token,
         ):
             auth = ForwardSessionTokenAuth()
@@ -106,7 +106,7 @@ class TestForwardSessionTokenAuth:
     @pytest.mark.asyncio
     async def test_raises_when_no_session_token(self):
         with patch(
-            "authful_mcp_proxy.outbound_auth.get_access_token", return_value=None
+            "authsome_mcp_proxy.outbound_auth.get_access_token", return_value=None
         ):
             auth = ForwardSessionTokenAuth()
             request = httpx.Request("GET", "https://upstream.example.com/")
@@ -118,7 +118,7 @@ class TestForwardSessionTokenAuth:
     async def test_raises_when_session_token_has_empty_value(self):
         mock_token = MagicMock(token="")
         with patch(
-            "authful_mcp_proxy.outbound_auth.get_access_token",
+            "authsome_mcp_proxy.outbound_auth.get_access_token",
             return_value=mock_token,
         ):
             auth = ForwardSessionTokenAuth()
@@ -188,7 +188,7 @@ class TestOAuthClientCredentialsAuth:
         mock_client.post.return_value = mock_response
 
         with patch(
-            "authful_mcp_proxy.outbound_auth.httpx.AsyncClient",
+            "authsome_mcp_proxy.outbound_auth.httpx.AsyncClient",
             return_value=mock_client,
         ):
             request = httpx.Request("GET", "https://upstream.example.com/")
@@ -216,7 +216,7 @@ class TestOAuthClientCredentialsAuth:
         auth._expires_at = time.time() + 3600
 
         with patch(
-            "authful_mcp_proxy.outbound_auth.httpx.AsyncClient"
+            "authsome_mcp_proxy.outbound_auth.httpx.AsyncClient"
         ) as mock_client_class:
             request = httpx.Request("GET", "https://upstream.example.com/")
             flow = auth.async_auth_flow(request)
@@ -248,7 +248,7 @@ class TestOAuthClientCredentialsAuth:
         mock_client.post.return_value = mock_response
 
         with patch(
-            "authful_mcp_proxy.outbound_auth.httpx.AsyncClient",
+            "authsome_mcp_proxy.outbound_auth.httpx.AsyncClient",
             return_value=mock_client,
         ):
             request = httpx.Request("GET", "https://upstream.example.com/")
@@ -275,7 +275,7 @@ class TestOAuthClientCredentialsAuth:
         mock_client.post.return_value = mock_response
 
         with patch(
-            "authful_mcp_proxy.outbound_auth.httpx.AsyncClient",
+            "authsome_mcp_proxy.outbound_auth.httpx.AsyncClient",
             return_value=mock_client,
         ):
             request = httpx.Request("GET", "https://upstream.example.com/")
@@ -303,7 +303,7 @@ class TestOAuthClientCredentialsAuth:
         mock_client.post.return_value = mock_response
 
         with patch(
-            "authful_mcp_proxy.outbound_auth.httpx.AsyncClient",
+            "authsome_mcp_proxy.outbound_auth.httpx.AsyncClient",
             return_value=mock_client,
         ):
             request = httpx.Request("GET", "https://upstream.example.com/")

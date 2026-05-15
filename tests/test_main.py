@@ -1,4 +1,4 @@
-"""Tests for authful_mcp_proxy.__main__ module."""
+"""Tests for authsome_mcp_proxy.__main__ module."""
 
 import logging
 import os
@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from authful_mcp_proxy.__main__ import build_proxy_config, cli, get_log_level_name
-from authful_mcp_proxy.config import DesktopConfig, WebConfig
+from authsome_mcp_proxy.__main__ import build_proxy_config, cli, get_log_level_name
+from authsome_mcp_proxy.config import DesktopConfig, WebConfig
 
 
 class TestCLI:
@@ -16,7 +16,7 @@ class TestCLI:
     def test_cli_with_all_args(self):
         """Test CLI parsing with all arguments provided."""
         test_args = [
-            "http://backend.example.com/mcp",
+            "http://upstream.example.com/mcp",
             "--oidc-issuer-url",
             "https://auth.example.com",
             "--oidc-client-id",
@@ -30,10 +30,10 @@ class TestCLI:
             "--debug",
         ]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
-        assert args.mcp_backend_url == "http://backend.example.com/mcp"
+        assert args.upstream_mcp_url == "http://upstream.example.com/mcp"
         assert args.oidc_issuer_url == "https://auth.example.com"
         assert args.oidc_client_id == "test-client"
         assert args.oidc_client_secret == "test-secret"
@@ -44,27 +44,27 @@ class TestCLI:
 
     def test_cli_with_minimal_args(self):
         """Test CLI parsing with minimal arguments."""
-        test_args = ["http://backend.example.com/mcp"]
+        test_args = ["http://upstream.example.com/mcp"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
-        assert args.mcp_backend_url == "http://backend.example.com/mcp"
+        assert args.upstream_mcp_url == "http://upstream.example.com/mcp"
         assert args.debug is False
         assert args.silent is False
 
-    def test_cli_with_no_backend_url(self):
-        """Test CLI parsing when backend URL is not provided."""
-        with patch("sys.argv", ["authful-mcp-proxy"]):
+    def test_cli_with_no_upstream_url(self):
+        """Test CLI parsing when upstream URL is not provided."""
+        with patch("sys.argv", ["authsome-mcp-proxy"]):
             with patch.dict(os.environ, {}, clear=True):
                 args = cli()
 
-        assert args.mcp_backend_url is None
+        assert args.upstream_mcp_url is None
 
     def test_cli_env_var_fallback(self):
         """Test that CLI falls back to environment variables."""
         env_vars = {
-            "MCP_BACKEND_URL": "http://env-backend.example.com/mcp",
+            "UPSTREAM_MCP_URL": "http://env-upstream.example.com/mcp",
             "OIDC_ISSUER_URL": "https://env-auth.example.com",
             "OIDC_CLIENT_ID": "env-client",
             "OIDC_CLIENT_SECRET": "env-secret",
@@ -72,11 +72,11 @@ class TestCLI:
             "OIDC_REDIRECT_URL": "http://localhost:9090/callback",
         }
 
-        with patch("sys.argv", ["authful-mcp-proxy"]):
+        with patch("sys.argv", ["authsome-mcp-proxy"]):
             with patch.dict(os.environ, env_vars):
                 args = cli()
 
-        assert args.mcp_backend_url == "http://env-backend.example.com/mcp"
+        assert args.upstream_mcp_url == "http://env-upstream.example.com/mcp"
         assert args.oidc_issuer_url == "https://env-auth.example.com"
         assert args.oidc_client_id == "env-client"
         assert args.oidc_client_secret == "env-secret"
@@ -86,28 +86,28 @@ class TestCLI:
     def test_cli_args_override_env_vars(self):
         """Test that CLI arguments take precedence over environment variables."""
         env_vars = {
-            "MCP_BACKEND_URL": "http://env-backend.example.com/mcp",
+            "UPSTREAM_MCP_URL": "http://env-upstream.example.com/mcp",
             "OIDC_ISSUER_URL": "https://env-auth.example.com",
         }
 
         test_args = [
-            "http://cli-backend.example.com/mcp",
+            "http://cli-upstream.example.com/mcp",
             "--oidc-issuer-url",
             "https://cli-auth.example.com",
         ]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             with patch.dict(os.environ, env_vars):
                 args = cli()
 
-        assert args.mcp_backend_url == "http://cli-backend.example.com/mcp"
+        assert args.upstream_mcp_url == "http://cli-upstream.example.com/mcp"
         assert args.oidc_issuer_url == "https://cli-auth.example.com"
 
     def test_cli_debug_flag(self):
         """Test debug flag sets debug to True."""
-        test_args = ["http://backend.example.com/mcp", "--debug"]
+        test_args = ["http://upstream.example.com/mcp", "--debug"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.debug is True
@@ -115,9 +115,9 @@ class TestCLI:
 
     def test_cli_silent_flag(self):
         """Test silent flag sets silent to True."""
-        test_args = ["http://backend.example.com/mcp", "--silent"]
+        test_args = ["http://upstream.example.com/mcp", "--silent"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.silent is True
@@ -125,9 +125,9 @@ class TestCLI:
 
     def test_cli_debug_env_var(self):
         """Test MCP_PROXY_DEBUG environment variable."""
-        test_args = ["http://backend.example.com/mcp"]
+        test_args = ["http://upstream.example.com/mcp"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             with patch.dict(os.environ, {"MCP_PROXY_DEBUG": "true"}):
                 args = cli()
 
@@ -135,52 +135,56 @@ class TestCLI:
 
     def test_cli_no_banner_flag(self):
         """Test --no-banner flag."""
-        test_args = ["http://backend.example.com/mcp", "--no-banner"]
+        test_args = ["http://upstream.example.com/mcp", "--no-banner"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.no_banner is True
 
     def test_cli_transport_default_is_stdio(self):
         """Test that transport defaults to stdio when not specified."""
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream.example.com/mcp"]
+        ):
             args = cli()
 
         assert args.transport == "stdio"
 
     def test_cli_transport_stdio_explicit(self):
         """Test explicit --transport stdio."""
-        test_args = ["http://backend.example.com/mcp", "--transport", "stdio"]
+        test_args = ["http://upstream.example.com/mcp", "--transport", "stdio"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.transport == "stdio"
 
     def test_cli_transport_http(self):
         """Test --transport http."""
-        test_args = ["http://backend.example.com/mcp", "--transport", "http"]
+        test_args = ["http://upstream.example.com/mcp", "--transport", "http"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.transport == "http"
 
     def test_cli_transport_env_var(self):
-        """Test MCP_TRANSPORT environment variable fallback."""
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
-            with patch.dict(os.environ, {"MCP_TRANSPORT": "http"}):
+        """Test MCP_PROXY_TRANSPORT environment variable fallback."""
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream.example.com/mcp"]
+        ):
+            with patch.dict(os.environ, {"MCP_PROXY_TRANSPORT": "http"}):
                 args = cli()
 
         assert args.transport == "http"
 
     def test_cli_transport_cli_overrides_env_var(self):
-        """Test that --transport takes precedence over MCP_TRANSPORT env var."""
-        test_args = ["http://backend.example.com/mcp", "--transport", "stdio"]
+        """Test that --transport takes precedence over MCP_PROXY_TRANSPORT env var."""
+        test_args = ["http://upstream.example.com/mcp", "--transport", "stdio"]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
-            with patch.dict(os.environ, {"MCP_TRANSPORT": "http"}):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
+            with patch.dict(os.environ, {"MCP_PROXY_TRANSPORT": "http"}):
                 args = cli()
 
         assert args.transport == "stdio"
@@ -188,14 +192,14 @@ class TestCLI:
     def test_cli_host_arg(self):
         """Test --host argument."""
         test_args = [
-            "http://backend.example.com/mcp",
+            "http://upstream.example.com/mcp",
             "--transport",
             "http",
             "--host",
             "127.0.0.1",
         ]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.host == "127.0.0.1"
@@ -203,37 +207,43 @@ class TestCLI:
     def test_cli_port_arg(self):
         """Test --port argument is parsed as integer."""
         test_args = [
-            "http://backend.example.com/mcp",
+            "http://upstream.example.com/mcp",
             "--transport",
             "http",
             "--port",
             "9000",
         ]
 
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
 
         assert args.port == 9000
 
     def test_cli_host_env_var(self):
-        """Test MCP_HOST environment variable fallback."""
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
-            with patch.dict(os.environ, {"MCP_HOST": "192.168.1.1"}):
+        """Test MCP_PROXY_HOST environment variable fallback."""
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream.example.com/mcp"]
+        ):
+            with patch.dict(os.environ, {"MCP_PROXY_HOST": "192.168.1.1"}):
                 args = cli()
 
         assert args.host == "192.168.1.1"
 
     def test_cli_port_env_var(self):
-        """Test MCP_PORT environment variable fallback is converted to int."""
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
-            with patch.dict(os.environ, {"MCP_PORT": "9000"}):
+        """Test MCP_PROXY_PORT environment variable fallback is converted to int."""
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream.example.com/mcp"]
+        ):
+            with patch.dict(os.environ, {"MCP_PROXY_PORT": "9000"}):
                 args = cli()
 
         assert args.port == 9000
 
     def test_cli_host_port_none_by_default(self):
         """Test that host and port are None when not provided (FastMCP uses its own defaults)."""
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend.example.com/mcp"]):
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream.example.com/mcp"]
+        ):
             with patch.dict(os.environ, {}, clear=True):
                 args = cli()
 
@@ -244,40 +254,44 @@ class TestCLI:
 class TestCLIWebModeFlags:
     """Test parsing of the http-mode-only CLI flags + env-var fallbacks."""
 
-    def test_auth_provider_flag(self):
+    def test_inbound_auth_provider_flag(self):
         test_args = [
-            "http://backend",
+            "http://upstream",
             "--transport",
             "http",
-            "--auth-provider",
+            "--inbound-auth-provider",
             "aws-cognito",
         ]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
-        assert args.auth_provider == "aws-cognito"
+        assert args.inbound_auth_provider == "aws-cognito"
 
-    def test_auth_provider_env_var(self):
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
-            with patch.dict(os.environ, {"AUTH_PROVIDER": "keycloak"}, clear=True):
-                args = cli()
-        assert args.auth_provider == "keycloak"
-
-    def test_base_url_flag_and_env(self):
-        test_args = ["http://backend", "--base-url", "https://mcp.example.com"]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
-            args = cli()
-        assert args.base_url == "https://mcp.example.com"
-
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+    def test_inbound_auth_provider_env_var(self):
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
             with patch.dict(
-                os.environ, {"BASE_URL": "https://env.example.com"}, clear=True
+                os.environ, {"INBOUND_AUTH_PROVIDER": "keycloak"}, clear=True
             ):
                 args = cli()
-        assert args.base_url == "https://env.example.com"
+        assert args.inbound_auth_provider == "keycloak"
+
+    def test_proxy_base_url_flag_and_env(self):
+        test_args = ["http://upstream", "--proxy-base-url", "https://mcp.example.com"]
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
+            args = cli()
+        assert args.proxy_base_url == "https://mcp.example.com"
+
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
+            with patch.dict(
+                os.environ,
+                {"MCP_PROXY_BASE_URL": "https://env.example.com"},
+                clear=True,
+            ):
+                args = cli()
+        assert args.proxy_base_url == "https://env.example.com"
 
     def test_provider_specific_flags(self):
         test_args = [
-            "http://backend",
+            "http://upstream",
             "--cognito-user-pool-id",
             "us-east-1_abc",
             "--cognito-aws-region",
@@ -289,7 +303,7 @@ class TestCLIWebModeFlags:
             "--audience",
             "mcp-server",
         ]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
         assert args.cognito_user_pool_id == "us-east-1_abc"
         assert args.cognito_aws_region == "us-east-1"
@@ -298,7 +312,7 @@ class TestCLIWebModeFlags:
         assert args.audience == "mcp-server"
 
     def test_provider_specific_env_vars(self):
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
             with patch.dict(
                 os.environ,
                 {
@@ -319,7 +333,7 @@ class TestCLIWebModeFlags:
 
     def test_outbound_auth_flags(self):
         test_args = [
-            "http://backend",
+            "http://upstream",
             "--outbound-auth",
             "oauth-client-credentials",
             "--outbound-client-id",
@@ -329,7 +343,7 @@ class TestCLIWebModeFlags:
             "--outbound-token-url",
             "https://idp.example.com/token",
         ]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
         assert args.outbound_auth == "oauth-client-credentials"
         assert args.outbound_client_id == "ocid"
@@ -338,7 +352,7 @@ class TestCLIWebModeFlags:
 
     def test_outbound_static_flags(self):
         test_args = [
-            "http://backend",
+            "http://upstream",
             "--outbound-auth",
             "static",
             "--outbound-header-name",
@@ -346,7 +360,7 @@ class TestCLIWebModeFlags:
             "--outbound-header-value",
             "abc123",
         ]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
         assert args.outbound_auth == "static"
         assert args.outbound_header_name == "X-API-Key"
@@ -354,43 +368,43 @@ class TestCLIWebModeFlags:
 
     def test_server_identity_flags(self):
         test_args = [
-            "http://backend",
-            "--server-name",
+            "http://upstream",
+            "--proxy-name",
             "ANALYZE",
-            "--server-version",
+            "--proxy-version",
             "2.3.0",
-            "--server-instructions",
+            "--proxy-instructions",
             "Use these tools for traceability analysis.",
-            "--server-website-url",
+            "--proxy-website-url",
             "https://analyze.example.com",
         ]
-        with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+        with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
             args = cli()
-        assert args.server_name == "ANALYZE"
-        assert args.server_version == "2.3.0"
-        assert args.server_instructions == "Use these tools for traceability analysis."
-        assert args.server_website_url == "https://analyze.example.com"
+        assert args.proxy_name == "ANALYZE"
+        assert args.proxy_version == "2.3.0"
+        assert args.proxy_instructions == "Use these tools for traceability analysis."
+        assert args.proxy_website_url == "https://analyze.example.com"
 
     def test_server_identity_env_vars(self):
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
             with patch.dict(
                 os.environ,
                 {
-                    "SERVER_NAME": "ANALYZE",
-                    "SERVER_VERSION": "2.3.0",
-                    "SERVER_INSTRUCTIONS": "Env-supplied instructions.",
-                    "SERVER_WEBSITE_URL": "https://analyze.example.com",
+                    "MCP_PROXY_NAME": "ANALYZE",
+                    "MCP_PROXY_VERSION": "2.3.0",
+                    "MCP_PROXY_INSTRUCTIONS": "Env-supplied instructions.",
+                    "MCP_PROXY_WEBSITE_URL": "https://analyze.example.com",
                 },
                 clear=True,
             ):
                 args = cli()
-        assert args.server_name == "ANALYZE"
-        assert args.server_version == "2.3.0"
-        assert args.server_instructions == "Env-supplied instructions."
-        assert args.server_website_url == "https://analyze.example.com"
+        assert args.proxy_name == "ANALYZE"
+        assert args.proxy_version == "2.3.0"
+        assert args.proxy_instructions == "Env-supplied instructions."
+        assert args.proxy_website_url == "https://analyze.example.com"
 
     def test_outbound_env_vars(self):
-        with patch("sys.argv", ["authful-mcp-proxy", "http://backend"]):
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
             with patch.dict(
                 os.environ,
                 {
@@ -413,7 +427,7 @@ class TestCLIWebModeFlags:
 
 
 def _parse(test_args: list[str]):
-    with patch("sys.argv", ["authful-mcp-proxy"] + test_args):
+    with patch("sys.argv", ["authsome-mcp-proxy"] + test_args):
         with patch.dict(os.environ, {}, clear=True):
             return cli()
 
@@ -424,7 +438,7 @@ class TestBuildProxyConfig:
     def test_stdio_builds_desktop_config(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--oidc-issuer-url",
                 "https://auth.example.com",
                 "--oidc-client-id",
@@ -445,43 +459,43 @@ class TestBuildProxyConfig:
         assert config.scopes == "openid"
         assert config.redirect_url == "http://localhost:8080/callback"
 
-    def test_http_requires_base_url(self):
+    def test_http_requires_proxy_base_url(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
             ]
         )
-        with pytest.raises(ValueError, match="--base-url"):
+        with pytest.raises(ValueError, match="--proxy-base-url"):
             build_proxy_config(args)
 
-    def test_http_requires_auth_provider(self):
+    def test_http_requires_inbound_auth_provider(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
             ]
         )
-        with pytest.raises(ValueError, match="--auth-provider"):
+        with pytest.raises(ValueError, match="--inbound-auth-provider"):
             build_proxy_config(args)
 
     def test_http_builds_web_config_for_keycloak(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
@@ -491,8 +505,8 @@ class TestBuildProxyConfig:
         )
         config = build_proxy_config(args)
         assert isinstance(config, WebConfig)
-        assert config.auth_provider == "keycloak"
-        assert config.base_url == "https://mcp.example.com"
+        assert config.inbound_auth_provider == "keycloak"
+        assert config.proxy_base_url == "https://mcp.example.com"
         assert config.issuer_url == "https://kc/realms/r"
         assert config.audience == "mcp-server"
         # Defaults for outbound when nothing else is set
@@ -502,12 +516,12 @@ class TestBuildProxyConfig:
     def test_http_builds_web_config_for_aws_cognito(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "aws-cognito",
                 "--oidc-client-id",
                 "cid",
@@ -521,7 +535,7 @@ class TestBuildProxyConfig:
         )
         config = build_proxy_config(args)
         assert isinstance(config, WebConfig)
-        assert config.auth_provider == "aws-cognito"
+        assert config.inbound_auth_provider == "aws-cognito"
         assert config.client_id == "cid"
         assert config.cognito_user_pool_id == "us-east-1_abc"
         assert config.cognito_aws_region == "us-east-1"
@@ -529,12 +543,12 @@ class TestBuildProxyConfig:
     def test_http_builds_web_config_with_oauth_cc_outbound(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
@@ -556,12 +570,12 @@ class TestBuildProxyConfig:
     def test_http_builds_web_config_with_static_outbound(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
@@ -582,43 +596,41 @@ class TestBuildProxyConfig:
     def test_http_propagates_server_identity_fields(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
-                "--server-name",
+                "--proxy-name",
                 "ANALYZE",
-                "--server-version",
+                "--proxy-version",
                 "2.3.0",
-                "--server-instructions",
+                "--proxy-instructions",
                 "Use these tools for traceability analysis.",
-                "--server-website-url",
+                "--proxy-website-url",
                 "https://analyze.example.com",
             ]
         )
         config = build_proxy_config(args)
         assert isinstance(config, WebConfig)
-        assert config.server_name == "ANALYZE"
-        assert config.server_version == "2.3.0"
-        assert (
-            config.server_instructions == "Use these tools for traceability analysis."
-        )
-        assert config.server_website_url == "https://analyze.example.com"
+        assert config.proxy_name == "ANALYZE"
+        assert config.proxy_version == "2.3.0"
+        assert config.proxy_instructions == "Use these tools for traceability analysis."
+        assert config.proxy_website_url == "https://analyze.example.com"
 
     def test_http_server_identity_fields_default_to_none(self):
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "keycloak",
                 "--oidc-issuer-url",
                 "https://kc/realms/r",
@@ -626,22 +638,22 @@ class TestBuildProxyConfig:
         )
         config = build_proxy_config(args)
         assert isinstance(config, WebConfig)
-        assert config.server_name is None
-        assert config.server_version is None
-        assert config.server_instructions is None
-        assert config.server_website_url is None
+        assert config.proxy_name is None
+        assert config.proxy_version is None
+        assert config.proxy_instructions is None
+        assert config.proxy_website_url is None
 
     def test_http_propagates_post_init_validation_errors(self):
         """Per-provider field validation lives in WebConfig.__post_init__ —
         build_proxy_config surfaces those ValueErrors transparently."""
         args = _parse(
             [
-                "http://backend",
+                "http://upstream",
                 "--transport",
                 "http",
-                "--base-url",
+                "--proxy-base-url",
                 "https://mcp.example.com",
-                "--auth-provider",
+                "--inbound-auth-provider",
                 "aws-cognito",
                 # missing client_id, client_secret, user-pool-id, region
             ]

@@ -1,10 +1,10 @@
 <!-- omit from toc -->
-Authful MCP Proxy
-=================
+Authsome MCP Proxy
+==================
 
 A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server that performs OIDC authentication to obtain access tokens for remote MCP servers protected by token validation. It can run in two modes:
 
-- **Local stdio proxy** — launched as a subprocess by an MCP client (Claude Desktop, Cursor, Windsurf, Claude Code via `claude mcp add --transport stdio`). Each client manages its own proxy instance.
+- **Local stdio proxy** — launched as a subprocess by an MCP client (Claude Desktop, Cursor, Codex, Claude Code via `claude mcp add --transport stdio`). Each client manages its own proxy instance.
 - **Web connector proxy** — runs as a persistent HTTP server, shared by any number of MCP clients that connect by URL (e.g. Claude Code via `claude mcp add --transport http`).
 
 - [What Is This For?](#what-is-this-for)
@@ -28,7 +28,7 @@ A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server 
   - [Using with Other MCP Clients](#using-with-other-mcp-clients)
     - [Claude Code](#claude-code)
     - [MCP Inspector](#mcp-inspector)
-    - [Cursor / Windsurf](#cursor--windsurf)
+    - [Cursor / Codex](#cursor--windsurf)
     - [Command Line / Direct Usage](#command-line--direct-usage)
   - [Credential Management](#credential-management)
     - [Where Are Credentials Stored?](#where-are-credentials-stored)
@@ -39,7 +39,7 @@ A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server 
     - [401 Unauthorized Errors](#401-unauthorized-errors)
     - [Redirect URI Mismatch](#redirect-uri-mismatch)
     - [Token Refresh Failures](#token-refresh-failures)
-    - [Connection to Backend Fails](#connection-to-backend-fails)
+    - [Connection to Upstream Fails](#connection-to-upstream-fails)
     - [MCP Client Doesn't Recognize the Proxy](#mcp-client-doesnt-recognize-the-proxy)
     - [Debug Logging](#debug-logging)
     - [Still Having Issues?](#still-having-issues)
@@ -47,23 +47,23 @@ A [Model Context Protocol](https://modelcontextprotocol.com) (MCP) proxy server 
 
 # What Is This For?
 
-Use `authful-mcp-proxy` when you need to connect MCP clients to a remote MCP server that:
+Use `authsome-mcp-proxy` when you need to connect MCP clients to a remote MCP server that:
 
 - Is protected by OAuth/OIDC token validation
 - Doesn't handle authentication itself (no built-in OAuth flows)
 - Returns `401 Unauthorized` without proper access tokens
 
-**As a local stdio proxy** (default), it is launched as a subprocess by the MCP client. Each user runs their own instance. Supported by Claude Desktop, Cursor, Windsurf, and Claude Code (`claude mcp add --transport stdio`).
+**As a local stdio proxy** (default), it is launched as a subprocess by the MCP client. Each user runs their own instance. Supported by Claude Desktop, Cursor, Codex, and Claude Code (`claude mcp add --transport stdio`).
 
-**As a web connector proxy** (`--transport http`), it runs as a persistent HTTP server. A single instance can serve multiple clients simultaneously, each getting an isolated backend session. Useful for shared team deployments or anywhere a URL endpoint is more practical than a per-user subprocess. Connect with Claude Code via `claude mcp add --transport http <name> <url>`.
+**As a web connector proxy** (`--transport http`), it runs as a persistent HTTP server. A single instance can serve multiple clients simultaneously, each getting an isolated upstream session. Useful for shared team deployments or anywhere a URL endpoint is more practical than a per-user subprocess. Connect with Claude Code via `claude mcp add --transport http <name> <url>`.
 
-The proxy handles the full OIDC authentication flow, securely stores credentials in `~/.mcp-auth/authful-mcp-proxy-<version>/`, and automatically refreshes tokens as needed.
+The proxy handles the full OIDC authentication flow, securely stores credentials in `~/.mcp-auth/authsome-mcp-proxy-<version>/`, and automatically refreshes tokens as needed.
 
 ## Technical Background
 
 Typically, securing MCP connections with OAuth or OpenID connect (OIDC) requires "authful" MCP servers that [coordinate with external identity providers](https://gofastmcp.com/servers/auth/authentication#external-identity-providers). MCP clients handle authentication through the MCP server, which in turn interacts with the OAuth or OIDC authorization server. However, this doesn't work with MCP servers only protected by [token validation](https://gofastmcp.com/servers/auth/authentication#token-validation), i.e., MCP servers that trust tokens from a known issuer but don't coordinate with the OAuth/OIDC authorization server themselves. In such scenarios, MCP clients detect the MCP server isn't authful and skip the OAuth/OIDC authentication entirely, resulting in `401 Unauthorized` errors for all tool, resource, and prompt requests.
 
-This MCP proxy fills that gap by handling authentication independently through direct OIDC authorization server interaction. It performs the OAuth authorization code flow by opening the user's browser to the OIDC authorization endpoint for login and scope approval. A temporary local HTTP server receives the OAuth redirect and exchanges the authorization code for access and refresh tokens using PKCE. The access token is used as a Bearer token for all backend MCP server requests and cached locally to avoid repeated browser interactions. When tokens expire, the proxy automatically obtains new ones using the refresh token.
+This MCP proxy fills that gap by handling authentication independently through direct OIDC authorization server interaction. It performs the OAuth authorization code flow by opening the user's browser to the OIDC authorization endpoint for login and scope approval. A temporary local HTTP server receives the OAuth redirect and exchanges the authorization code for access and refresh tokens using PKCE. The access token is used as a Bearer token for all upstream MCP server requests and cached locally to avoid repeated browser interactions. When tokens expire, the proxy automatically obtains new ones using the refresh token.
 
 # Usage
 
@@ -88,7 +88,7 @@ See the [uv installation guide](https://docs.astral.sh/uv/getting-started/instal
 
 ## Quick Start
 
-The simplest way to use `authful-mcp-proxy` with MCP clients like Claude Desktop:
+The simplest way to use `authsome-mcp-proxy` with MCP clients like Claude Desktop:
 
 ```jsonc
 {
@@ -96,8 +96,8 @@ The simplest way to use `authful-mcp-proxy` with MCP clients like Claude Desktop
     "my-protected-server": {
       "command": "uvx",
       "args": [
-        "authful-mcp-proxy",
-        "https://mcp-backend.company.com/mcp"
+        "authsome-mcp-proxy",
+        "https://mcp-upstream.company.com/mcp"
       ],
       "env": {
         "OIDC_ISSUER_URL": "https://auth.company.com",
@@ -118,13 +118,13 @@ The proxy will open your browser for authentication. After you log in and approv
 
 ## Configuration Options
 
-All options can be set via environment variables in the `env` block or passed as CLI arguments (see `uvx authful-mcp-proxy --help`).
+All options can be set via environment variables in the `env` block or passed as CLI arguments (see `uvx authsome-mcp-proxy --help`).
 
 ### Required Configuration
 
 | Environment Variable | Description | Example |
 |---------------------|-------------|---------|
-| `MCP_BACKEND_URL` | Remote MCP server URL (can also be first argument) | `https://mcp.example.com/mcp` |
+| `UPSTREAM_MCP_URL` | Remote MCP server URL (can also be first argument) | `https://mcp.example.com/mcp` |
 | `OIDC_ISSUER_URL` | Your OIDC provider's issuer URL | `https://auth.example.com` |
 | `OIDC_CLIENT_ID` | OAuth client ID from your OIDC provider | `my-app-client-id` |
 
@@ -140,9 +140,9 @@ All options can be set via environment variables in the `env` block or passed as
 
 | CLI Flag / Env Var | Description |
 |--------------------|-------------|
-| `--transport {stdio,http}` / `MCP_TRANSPORT` | Transport to serve on. `stdio` (default): launched as a local process by the MCP client. `http`: runs as a standalone HTTP server. |
-| `--host` / `MCP_HOST` | Host address to bind to for HTTP transport (default: `0.0.0.0`) |
-| `--port` / `MCP_PORT` | Port to listen on for HTTP transport (default: `8000`) |
+| `--transport {stdio,http}` / `MCP_PROXY_TRANSPORT` | Transport to serve on. `stdio` (default): launched as a local process by the MCP client. `http`: runs as a standalone HTTP server. |
+| `--host` / `MCP_PROXY_HOST` | Host address to bind to for HTTP transport (default: `0.0.0.0`) |
+| `--port` / `MCP_PROXY_PORT` | Port to listen on for HTTP transport (default: `8000`) |
 | `--no-banner` | Suppress the startup banner |
 | `--silent` | Show only error messages |
 | `--debug` / `MCP_PROXY_DEBUG` | Enable detailed debug logging |
@@ -159,8 +159,8 @@ Add to your Claude Desktop config (accessible via Settings → Developer → Edi
     "company-tools": {
       "command": "uvx",
       "args": [
-        "authful-mcp-proxy",
-        "https://mcp-backend.company.com/mcp"
+        "authsome-mcp-proxy",
+        "https://mcp-upstream.company.com/mcp"
       ],
       "env": {
         "OIDC_ISSUER_URL": "https://auth.company.com",
@@ -186,7 +186,7 @@ To always use the latest version from PyPI (auto-updates):
     "my-server": {
       "command": "uvx",
       "args": [
-        "authful-mcp-proxy@latest",
+        "authsome-mcp-proxy@latest",
         "https://mcp.example.com/mcp"
       ],
       "env": {
@@ -209,7 +209,7 @@ For OIDC confidential clients requiring a secret:
   "mcpServers": {
     "secure-server": {
       "command": "uvx",
-      "args": ["authful-mcp-proxy", "https://api.example.com/mcp"],
+      "args": ["authsome-mcp-proxy", "https://api.example.com/mcp"],
       "env": {
         "OIDC_ISSUER_URL": "https://login.example.com",
         "OIDC_CLIENT_ID": "your-confidential-client-id",
@@ -232,7 +232,7 @@ If port 8080 is already in use, specify a different port:
   "mcpServers": {
     "my-server": {
       "command": "uvx",
-      "args": ["authful-mcp-proxy", "https://mcp.example.com"],
+      "args": ["authsome-mcp-proxy", "https://mcp.example.com"],
       "env": {
         "OIDC_ISSUER_URL": "https://auth.example.com",
         "OIDC_CLIENT_ID": "my-client-id",
@@ -257,8 +257,8 @@ When developing or testing local changes:
       "args": [
         "run",
         "--with-editable",
-        "/path/to/authful-mcp-proxy",
-        "authful-mcp-proxy",
+        "/path/to/authsome-mcp-proxy",
+        "authsome-mcp-proxy",
         "https://mcp.example.com/mcp"
       ],
       "env": {
@@ -282,7 +282,7 @@ Enable detailed logging for troubleshooting:
     "debug-server": {
       "command": "uvx",
       "args": [
-        "authful-mcp-proxy",
+        "authsome-mcp-proxy",
         "--debug",
         "https://mcp.example.com"
       ],
@@ -304,24 +304,24 @@ Run the proxy as a persistent HTTP server that any MCP client can reach by URL. 
 **Step 1 — Start the proxy** on any machine with a browser (needed for first-time OIDC authentication):
 
 ```bash
-uvx authful-mcp-proxy \
+uvx authsome-mcp-proxy \
   --transport http \
   --host 0.0.0.0 \
   --port 8000 \
   --oidc-issuer-url https://auth.example.com \
   --oidc-client-id my-client-id \
-  https://mcp-backend.example.com/mcp
+  https://mcp-upstream.example.com/mcp
 ```
 
 Or equivalently via environment variables (useful for Docker or systemd):
 
 ```bash
-MCP_TRANSPORT=http \
-MCP_PORT=8000 \
+MCP_PROXY_TRANSPORT=http \
+MCP_PROXY_PORT=8000 \
 OIDC_ISSUER_URL=https://auth.example.com \
 OIDC_CLIENT_ID=my-client-id \
-MCP_BACKEND_URL=https://mcp-backend.example.com/mcp \
-uvx authful-mcp-proxy
+UPSTREAM_MCP_URL=https://mcp-upstream.example.com/mcp \
+uvx authsome-mcp-proxy
 ```
 
 The proxy will open a browser for OIDC login on first run, then cache the tokens and start the HTTP server at `http://0.0.0.0:8000/mcp`.
@@ -330,7 +330,7 @@ The proxy will open a browser for OIDC login on first run, then cache the tokens
 >
 > ℹ️ **Note:** If deploying to a headless server, see [Authentication Fails in Headless / Server Environments](#authentication-fails-in-headless--server-environments) for how to handle first-time authentication.
 
-**Step 2 — Connect clients** to the running proxy by URL. Each client gets an isolated backend session.
+**Step 2 — Connect clients** to the running proxy by URL. Each client gets an isolated upstream session.
 
 With Claude Code:
 ```bash
@@ -352,10 +352,10 @@ Claude Code supports both stdio and HTTP transport. Use stdio if you want each d
 
 ```bash
 claude mcp add --transport stdio my-server -- \
-  uvx authful-mcp-proxy \
+  uvx authsome-mcp-proxy \
   --oidc-issuer-url https://auth.example.com \
   --oidc-client-id my-client-id \
-  https://mcp-backend.example.com/mcp
+  https://mcp-upstream.example.com/mcp
 ```
 
 **HTTP (connecting to a running proxy by URL):**
@@ -375,9 +375,9 @@ Create an `mcp.json` file:
 ```jsonc
 {
   "mcpServers": {
-    "authful-mcp-proxy": {
+    "authsome-mcp-proxy": {
       "command": "uvx",
-      "args": ["authful-mcp-proxy", "https://mcp.example.com/mcp"],
+      "args": ["authsome-mcp-proxy", "https://mcp.example.com/mcp"],
       "env": {
         "OIDC_ISSUER_URL": "https://auth.example.com",
         "OIDC_CLIENT_ID": "inspector-client"
@@ -390,7 +390,7 @@ Create an `mcp.json` file:
 > ⚠️ **Important:** Make sure your OIDC client is configured with `http://localhost:8080/auth/callback` as an allowed redirect URI!
 
 ```bash
-npx @modelcontextprotocol/inspector --config mcp.json --server authful-mcp-proxy
+npx @modelcontextprotocol/inspector --config mcp.json --server authsome-mcp-proxy
 ```
 
 **HTTP (connecting to a running proxy):**
@@ -399,7 +399,7 @@ npx @modelcontextprotocol/inspector --config mcp.json --server authful-mcp-proxy
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
-### Cursor / Windsurf
+### Cursor / Codex
 
 These editors use the same configuration format as Claude Desktop. Add the server config to your MCP settings file.
 
@@ -407,10 +407,10 @@ These editors use the same configuration format as Claude Desktop. Add the serve
 
 ```bash
 # Install globally
-uvx authful-mcp-proxy --help
+uvx authsome-mcp-proxy --help
 
 # Run directly
-uvx authful-mcp-proxy \
+uvx authsome-mcp-proxy \
   --oidc-issuer-url https://auth.example.com \
   --oidc-client-id my-client \
   https://mcp.example.com/mcp
@@ -420,9 +420,9 @@ uvx authful-mcp-proxy \
 
 ### Where Are Credentials Stored?
 
-Credentials are cached in `~/.mcp-auth/authful-mcp-proxy-<version>/` (where `<version>` is the installed package version, e.g. `0.5.0`) as a SQLite database:
+Credentials are cached in `~/.mcp-auth/authsome-mcp-proxy-<version>/` (where `<version>` is the installed package version, e.g. `0.5.0`) as a SQLite database:
 ```
-~/.mcp-auth/authful-mcp-proxy-0.5.0/
+~/.mcp-auth/authsome-mcp-proxy-0.5.0/
   ├── cache.db
   ├── cache.db-shm
   └── cache.db-wal
@@ -434,10 +434,10 @@ To force re-authentication (e.g., to switch accounts or clear expired tokens):
 
 ```bash
 # Linux/macOS
-rm -rf ~/.mcp-auth/authful-mcp-proxy*
+rm -rf ~/.mcp-auth/authsome-mcp-proxy*
 
 # Windows
-rmdir /s %USERPROFILE%\.mcp-auth\authful-mcp-proxy*
+rmdir /s %USERPROFILE%\.mcp-auth\authsome-mcp-proxy*
 ```
 
 The next time you connect, you'll be prompted to authenticate again.
@@ -462,17 +462,17 @@ The next time you connect, you'll be prompted to authenticate again.
 1. On your local machine, run the proxy with the same OIDC config to trigger the browser login:
 
    ```bash
-   uvx authful-mcp-proxy \
+   uvx authsome-mcp-proxy \
      --oidc-issuer-url https://auth.example.com \
      --oidc-client-id my-client-id \
-     https://mcp-backend.example.com/mcp
+     https://mcp-upstream.example.com/mcp
    ```
 
 2. After successful login, copy the token cache to the server:
 
    ```bash
    # Linux/macOS — copy the whole versioned directory
-   scp -r ~/.mcp-auth/authful-mcp-proxy-<version> user@server:~/.mcp-auth/
+   scp -r ~/.mcp-auth/authsome-mcp-proxy-<version> user@server:~/.mcp-auth/
    ```
 
 3. Start the proxy on the server — it will pick up the cached tokens and skip the browser flow.
@@ -510,17 +510,17 @@ Tokens will be silently refreshed using the refresh token for as long as the ref
    "OIDC_SCOPES": "openid profile email offline_access"
    ```
 3. **For AWS Cognito:** Refresh tokens are issued automatically - verify your app client has "Authorization code grant" enabled in the Cognito console
-4. Clear cached credentials to get new tokens: `rm -rf ~/.mcp-auth/authful-mcp-proxy*/`
+4. Clear cached credentials to get new tokens: `rm -rf ~/.mcp-auth/authsome-mcp-proxy*/`
 
-### Connection to Backend Fails
+### Connection to Upstream Fails
 
 **Problem:** Can't connect to remote MCP server.
 
 **Solutions:**
-1. Verify the backend URL is correct and accessible
-2. Check network connectivity to the backend server
-3. Ensure the backend server is running and accepting connections
-4. Try accessing the backend URL directly in a browser to verify it's reachable
+1. Verify the upstream URL is correct and accessible
+2. Check network connectivity to the upstream server
+3. Ensure the upstream server is running and accepting connections
+4. Try accessing the upstream URL directly in a browser to verify it's reachable
 5. Check for proxy/VPN issues that might block the connection
 
 ### MCP Client Doesn't Recognize the Proxy
@@ -538,7 +538,7 @@ Tokens will be silently refreshed using the refresh token for as long as the ref
 Enable debug mode to see detailed information about the authentication flow:
 
 ```bash
-uvx authful-mcp-proxy --debug https://mcp.example.com/mcp
+uvx authsome-mcp-proxy --debug https://mcp.example.com/mcp
 ```
 
 Or via environment variable:
@@ -553,7 +553,7 @@ Or via environment variable:
 
 ### Still Having Issues?
 
-1. Check the [examples directory](examples/token_validating_mcp_backend/) for a working test setup
+1. Check the [examples directory](examples/token_validating_upstream_mcp/) for a working test setup
 2. Run with `--debug` to get detailed logs
 3. Verify your OIDC provider configuration
 4. Open an issue on GitHub with debug logs (redact sensitive information)

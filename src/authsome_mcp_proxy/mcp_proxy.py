@@ -3,7 +3,7 @@ MCP proxy with two operating modes selected by config type.
 
 - :class:`DesktopConfig` -> stdio transport. The proxy is launched as a
   local process by the MCP client (Claude Desktop, Claude Code via
-  ``claude mcp add --transport stdio``, Cursor, Windsurf, etc.). The
+  ``claude mcp add --transport stdio``, Cursor, Codex, etc.). The
   proxy itself runs the OAuth Authorization Code + PKCE flow against an
   external OIDC IdP via :class:`ExternalOIDCAuth`, caches tokens on
   disk, and forwards them as Bearer tokens to the upstream MCP server.
@@ -19,7 +19,7 @@ MCP proxy with two operating modes selected by config type.
 
 Both paths converge on FastMCP's ``create_proxy`` + per-session
 ``client.new()`` model so each downstream session gets an isolated
-backend connection.
+upstream connection.
 """
 
 from typing import Any
@@ -34,7 +34,7 @@ from .outbound_auth import build_outbound_auth
 
 
 async def run_async(
-    backend_url: str,
+    upstream_url: str,
     config: ProxyConfig,
     show_banner: bool = True,
     **transport_kwargs: Any,
@@ -46,7 +46,7 @@ async def run_async(
     stdio; ``WebConfig`` always runs over http.
 
     Args:
-        backend_url: URL of the remote backend MCP server to proxy.
+        upstream_url: URL of the upstream MCP server to proxy.
         config: Either a ``DesktopConfig`` (stdio mode) or a ``WebConfig``
             (http mode). Selects the auth strategy and transport.
         show_banner: Whether to display the server startup banner.
@@ -58,9 +58,9 @@ async def run_async(
         TypeError: If ``config`` is not a recognized ``ProxyConfig`` type.
     """
     if isinstance(config, DesktopConfig):
-        await _run_desktop(backend_url, config, show_banner, **transport_kwargs)
+        await _run_desktop(upstream_url, config, show_banner, **transport_kwargs)
     elif isinstance(config, WebConfig):
-        await _run_web(backend_url, config, show_banner, **transport_kwargs)
+        await _run_web(upstream_url, config, show_banner, **transport_kwargs)
     else:
         raise TypeError(
             f"Unsupported config type: {type(config).__name__}. "
@@ -69,7 +69,7 @@ async def run_async(
 
 
 async def _run_desktop(
-    backend_url: str,
+    upstream_url: str,
     config: DesktopConfig,
     show_banner: bool,
     **transport_kwargs: Any,
@@ -83,13 +83,13 @@ async def _run_desktop(
         redirect_url=config.redirect_url,
     )
 
-    # Connect once to relay backend server identity (name/version/icons/etc.)
+    # Connect once to relay upstream server identity (name/version/icons/etc.)
     # so the proxy appears transparent to the MCP client.
-    async with Client(transport=backend_url, auth=auth) as authenticated_client:
+    async with Client(transport=upstream_url, auth=auth) as authenticated_client:
         proxy_kwargs = _relay_server_info(authenticated_client)
 
     # Disconnected client; FastMCP calls client.new() per session.
-    proxy_client = Client(transport=backend_url, auth=auth)
+    proxy_client = Client(transport=upstream_url, auth=auth)
     mcp_proxy = create_proxy(proxy_client, **proxy_kwargs)
 
     await mcp_proxy.run_async(
@@ -98,7 +98,7 @@ async def _run_desktop(
 
 
 async def _run_web(
-    backend_url: str,
+    upstream_url: str,
     config: WebConfig,
     show_banner: bool,
     **transport_kwargs: Any,
@@ -111,11 +111,11 @@ async def _run_web(
     # against the upstream) is skipped in web mode: with outbound_auth='forward'
     # there is no inbound session yet, and with the other modes the proxy-owned
     # credential may or may not be authorized to call initialize. Operators who
-    # want the proxy to appear transparent set server_name / server_version /
+    # want the proxy to appear transparent set proxy_name / proxy_version /
     # etc. on the config; without them FastMCP falls back to its auto-generated
     # FastMCPProxy-xxxx name.
     proxy_kwargs = _server_identity_kwargs(config)
-    proxy_client = Client(transport=backend_url, auth=outbound_auth)
+    proxy_client = Client(transport=upstream_url, auth=outbound_auth)
     mcp_proxy = create_proxy(proxy_client, auth=inbound_auth, **proxy_kwargs)
 
     await mcp_proxy.run_async(
@@ -130,14 +130,14 @@ def _server_identity_kwargs(config: WebConfig) -> dict[str, Any]:
     FastMCP's defaults apply.
     """
     kwargs: dict[str, Any] = {}
-    if config.server_name:
-        kwargs["name"] = config.server_name
-    if config.server_version:
-        kwargs["version"] = config.server_version
-    if config.server_instructions:
-        kwargs["instructions"] = config.server_instructions
-    if config.server_website_url:
-        kwargs["website_url"] = config.server_website_url
+    if config.proxy_name:
+        kwargs["name"] = config.proxy_name
+    if config.proxy_version:
+        kwargs["version"] = config.proxy_version
+    if config.proxy_instructions:
+        kwargs["instructions"] = config.proxy_instructions
+    if config.proxy_website_url:
+        kwargs["website_url"] = config.proxy_website_url
     return kwargs
 
 

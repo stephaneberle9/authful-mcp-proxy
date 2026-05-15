@@ -8,22 +8,22 @@ from fastmcp.server.dependencies import get_access_token
 logger = logging.getLogger(__name__)
 
 
-def validate_mcp_config(mcp_backend: FastMCP):
-    """Validate the MCP backend server's configuration."""
-    # Validate that the MCP backend server's auth provider is a JWTVerifier instance.
-    if mcp_backend.auth is None or not isinstance(mcp_backend.auth, JWTVerifier):
+def validate_mcp_config(upstream_mcp: FastMCP):
+    """Validate the upstream MCP server's configuration."""
+    # Validate that the upstream MCP server's auth provider is a JWTVerifier instance.
+    if upstream_mcp.auth is None or not isinstance(upstream_mcp.auth, JWTVerifier):
         raise ValueError(
-            f"Auth provider used by this MCP server must be a '{JWTVerifier.__name__}' instance, got {type(mcp_backend.auth).__name__ if mcp_backend.auth else None}"
+            f"Auth provider used by this MCP server must be a '{JWTVerifier.__name__}' instance, got {type(upstream_mcp.auth).__name__ if upstream_mcp.auth else None}"
         )
 
 
-def create_mcp_backend() -> FastMCP:
+def create_upstream_mcp() -> FastMCP:
     # FastMCP will automatically instantiate JWTVerifier based on FASTMCP_SERVER_AUTH env var
-    mcp_backend = FastMCP(name="Token-validating MCP Backend")
+    upstream_mcp = FastMCP(name="Token-validating Upstream MCP")
 
-    validate_mcp_config(mcp_backend)
+    validate_mcp_config(upstream_mcp)
 
-    @mcp_backend.tool
+    @upstream_mcp.tool
     async def get_access_token_claims() -> dict:
         """Get the authenticated user's access token claims."""
         # Retrieve access token
@@ -38,13 +38,13 @@ def create_mcp_backend() -> FastMCP:
             "cognito:groups": token.claims.get("cognito:groups", []),
         }
 
-    return mcp_backend
+    return upstream_mcp
 
 
 def main():
     try:
-        mcp_backend = create_mcp_backend()
-        mcp_backend.run(transport="http", port=8090, log_level="DEBUG")
+        upstream_mcp = create_upstream_mcp()
+        upstream_mcp.run(transport="http", port=8090, log_level="DEBUG")
     except KeyboardInterrupt:
         # Graceful shutdown, suppress noisy logs resulting from asyncio.run task cancellation propagation
         pass

@@ -1,5 +1,5 @@
 """
-Authful MCP Proxy - Command-line interface.
+Authsome MCP Proxy - Command-line interface.
 
 This module provides the CLI entry point for running the MCP proxy server. It:
 
@@ -12,7 +12,7 @@ This module provides the CLI entry point for running the MCP proxy server. It:
 CLI flags fall back to matching environment variables (CLI arguments take
 precedence). For stdio mode the ``OIDC_*`` env vars apply; for http mode
 the inbound provider params (``OIDC_*``, ``COGNITO_*``, ``AZURE_*``,
-``--audience``, ``--base-url``) and the outbound mode params
+``--audience``, ``--proxy-base-url``) and the outbound mode params
 (``OUTBOUND_*``) apply.
 """
 
@@ -32,7 +32,7 @@ from .config import DesktopConfig, ProxyConfig, WebConfig
 logger = logging.getLogger(__name__)
 
 
-_AUTH_PROVIDERS = ("oidc", "keycloak", "aws-cognito", "google", "azure")
+_INBOUND_AUTH_PROVIDERS = ("oidc", "keycloak", "aws-cognito", "google", "azure")
 _OUTBOUND_AUTH_MODES = ("forward", "oauth-client-credentials", "static")
 
 
@@ -40,7 +40,7 @@ def cli() -> argparse.Namespace:
     """
     Parse command line arguments and merge with environment variables.
 
-    Parses CLI arguments for OIDC configuration, backend URL, and logging options.
+    Parses CLI arguments for OIDC configuration, upstream URL, and logging options.
     Falls back to environment variables when CLI arguments are not provided, with
     CLI arguments taking precedence.
 
@@ -49,20 +49,20 @@ def cli() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            f"Authful MCP Proxy -- bridges remote MCP servers protected by "
-            f"token validation or static credentials to MCP clients such as "
-            f"Claude Desktop, Claude Code, Cursor, Windsurf, MCP Inspector, "
+            f"Authsome MCP Proxy -- bridges upstream MCP servers protected "
+            f"by token validation or static credentials to MCP clients such as "
+            f"Claude Desktop, Claude Code, Cursor, Codex, MCP Inspector, "
             f"and Claude.ai (version {__version__})"
         )
     )
 
     # Proxy server arguments
     parser.add_argument(
-        "mcp_backend_url",
-        metavar="MCP_BACKEND_URL",
+        "upstream_mcp_url",
+        metavar="UPSTREAM_MCP_URL",
         nargs="?",
-        help="URL of remote backend MCP server to be proxied "
-        "(can also be set via MCP_BACKEND_URL env var)",
+        help="URL of the upstream MCP server to be proxied "
+        "(can also be set via UPSTREAM_MCP_URL env var)",
     )
     parser.add_argument(
         "--no-banner",
@@ -78,28 +78,28 @@ def cli() -> argparse.Namespace:
         help="Transport to serve on. "
         "'stdio' (default): proxy is launched as a local process by the MCP "
         "client (Claude Desktop, Claude Code via 'claude mcp add --transport stdio', "
-        "Cursor, Windsurf, etc.). "
+        "Cursor, Codex, etc.). "
         "'http': proxy runs as a standalone HTTP server that clients connect to by URL "
         "(e.g. Claude Code via 'claude mcp add --transport http <name> <url>'). "
-        "Can also be set via MCP_TRANSPORT env var.",
+        "Can also be set via MCP_PROXY_TRANSPORT env var.",
     )
     parser.add_argument(
         "--host",
         default=None,
         help="Host address to bind to when using HTTP transport "
-        "(can also be set via MCP_HOST env var, default: 0.0.0.0)",
+        "(can also be set via MCP_PROXY_HOST env var, default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=None,
         help="Port to listen on when using HTTP transport "
-        "(can also be set via MCP_PORT env var, default: 8000)",
+        "(can also be set via MCP_PROXY_PORT env var, default: 8000)",
     )
 
     # Inbound OIDC options -- used by:
     # - stdio: the desktop OAuth client (issuer/client/scopes/redirect)
-    # - http: the FastMCP inbound provider when --auth-provider is
+    # - http: the FastMCP inbound provider when --inbound-auth-provider is
     #   'oidc'/'keycloak' (issuer_url), or as the OAuth client_id/secret
     #   common across 'oidc'/'aws-cognito'/'google'/'azure' (unused for
     #   'keycloak' which is a RemoteAuthProvider).
@@ -131,21 +131,21 @@ def cli() -> argparse.Namespace:
 
     # Web-mode-only inbound options
     parser.add_argument(
-        "--auth-provider",
-        choices=list(_AUTH_PROVIDERS),
+        "--inbound-auth-provider",
+        choices=list(_INBOUND_AUTH_PROVIDERS),
         default=None,
         help="Inbound auth provider for http mode. 'keycloak' uses FastMCP's "
         "KeycloakAuthProvider (RemoteAuthProvider -- Keycloak >= 26.6.0 with "
         "native DCR). 'oidc' uses OIDCProxy in DCR-bridge mode for any "
         "generic OIDC IdP (including older Keycloak). 'aws-cognito', "
         "'google', 'azure' use the matching IdP-specific FastMCP providers. "
-        "Can also be set via AUTH_PROVIDER env var.",
+        "Can also be set via INBOUND_AUTH_PROVIDER env var.",
     )
     parser.add_argument(
-        "--base-url",
+        "--proxy-base-url",
         default=None,
         help="Publicly reachable URL of the proxy -- required for http mode "
-        "(can also be set via BASE_URL env var). Used by inbound providers to "
+        "(can also be set via MCP_PROXY_BASE_URL env var). Used by inbound providers to "
         "advertise their authorization/token/JWKS endpoints to downstream MCP "
         "clients via OAuth 2.0 protected-resource metadata.",
     )
@@ -159,26 +159,26 @@ def cli() -> argparse.Namespace:
     parser.add_argument(
         "--cognito-user-pool-id",
         default=None,
-        help="AWS Cognito user pool ID -- required for --auth-provider aws-cognito "
+        help="AWS Cognito user pool ID -- required for --inbound-auth-provider aws-cognito "
         "(can also be set via COGNITO_USER_POOL_ID env var)",
     )
     parser.add_argument(
         "--cognito-aws-region",
         default=None,
-        help="AWS region for the Cognito user pool -- required for --auth-provider aws-cognito "
+        help="AWS region for the Cognito user pool -- required for --inbound-auth-provider aws-cognito "
         "(can also be set via COGNITO_AWS_REGION env var)",
     )
     parser.add_argument(
         "--azure-tenant-id",
         default=None,
-        help="Azure AD tenant ID -- required for --auth-provider azure "
+        help="Azure AD tenant ID -- required for --inbound-auth-provider azure "
         "(can also be set via AZURE_TENANT_ID env var)",
     )
     parser.add_argument(
         "--azure-identifier-uri",
         default=None,
         help="Azure Application ID URI used for scope prefixing -- optional for "
-        "--auth-provider azure (can also be set via AZURE_IDENTIFIER_URI env var)",
+        "--inbound-auth-provider azure (can also be set via AZURE_IDENTIFIER_URI env var)",
     )
 
     # Web-mode-only outbound options
@@ -233,30 +233,30 @@ def cli() -> argparse.Namespace:
 
     # Web-mode-only server-identity options
     parser.add_argument(
-        "--server-name",
+        "--proxy-name",
         default=None,
         help="Display name advertised to downstream MCP clients (e.g. 'ANALYZE'). "
         "Without this, FastMCP auto-generates 'FastMCPProxy-xxxx'. "
-        "Can also be set via SERVER_NAME env var.",
+        "Can also be set via MCP_PROXY_NAME env var.",
     )
     parser.add_argument(
-        "--server-version",
+        "--proxy-version",
         default=None,
         help="Display version string advertised to downstream MCP clients "
-        "(can also be set via SERVER_VERSION env var)",
+        "(can also be set via MCP_PROXY_VERSION env var)",
     )
     parser.add_argument(
-        "--server-instructions",
+        "--proxy-instructions",
         default=None,
         help="Instructions advertised alongside the tool catalog -- influences "
         "how the LLM selects and uses the upstream's tools "
-        "(can also be set via SERVER_INSTRUCTIONS env var)",
+        "(can also be set via MCP_PROXY_INSTRUCTIONS env var)",
     )
     parser.add_argument(
-        "--server-website-url",
+        "--proxy-website-url",
         default=None,
         help="Project URL shown in downstream MCP client UIs "
-        "(can also be set via SERVER_WEBSITE_URL env var)",
+        "(can also be set via MCP_PROXY_WEBSITE_URL env var)",
     )
 
     # Logging options
@@ -285,15 +285,15 @@ def _apply_env_fallbacks(args: argparse.Namespace) -> None:
     handled separately below.
     """
     env_fallbacks = (
-        ("mcp_backend_url", "MCP_BACKEND_URL"),
-        ("host", "MCP_HOST"),
+        ("upstream_mcp_url", "UPSTREAM_MCP_URL"),
+        ("host", "MCP_PROXY_HOST"),
         ("oidc_issuer_url", "OIDC_ISSUER_URL"),
         ("oidc_client_id", "OIDC_CLIENT_ID"),
         ("oidc_client_secret", "OIDC_CLIENT_SECRET"),
         ("oidc_scopes", "OIDC_SCOPES"),
         ("oidc_redirect_url", "OIDC_REDIRECT_URL"),
-        ("auth_provider", "AUTH_PROVIDER"),
-        ("base_url", "BASE_URL"),
+        ("inbound_auth_provider", "INBOUND_AUTH_PROVIDER"),
+        ("proxy_base_url", "MCP_PROXY_BASE_URL"),
         ("audience", "AUDIENCE"),
         ("cognito_user_pool_id", "COGNITO_USER_POOL_ID"),
         ("cognito_aws_region", "COGNITO_AWS_REGION"),
@@ -305,19 +305,19 @@ def _apply_env_fallbacks(args: argparse.Namespace) -> None:
         ("outbound_token_url", "OUTBOUND_TOKEN_URL"),
         ("outbound_header_name", "OUTBOUND_HEADER_NAME"),
         ("outbound_header_value", "OUTBOUND_HEADER_VALUE"),
-        ("server_name", "SERVER_NAME"),
-        ("server_version", "SERVER_VERSION"),
-        ("server_instructions", "SERVER_INSTRUCTIONS"),
-        ("server_website_url", "SERVER_WEBSITE_URL"),
+        ("proxy_name", "MCP_PROXY_NAME"),
+        ("proxy_version", "MCP_PROXY_VERSION"),
+        ("proxy_instructions", "MCP_PROXY_INSTRUCTIONS"),
+        ("proxy_website_url", "MCP_PROXY_WEBSITE_URL"),
     )
     for attr, env_name in env_fallbacks:
         if not getattr(args, attr):
             setattr(args, attr, os.getenv(env_name))
 
     if not args.transport:
-        args.transport = os.getenv("MCP_TRANSPORT") or "stdio"
+        args.transport = os.getenv("MCP_PROXY_TRANSPORT") or "stdio"
     if not args.port:
-        port_env = os.getenv("MCP_PORT")
+        port_env = os.getenv("MCP_PROXY_PORT")
         args.port = int(port_env) if port_env else None
     if not args.debug:
         args.debug = os.getenv("MCP_PROXY_DEBUG", "").lower() in (
@@ -334,10 +334,10 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
     Branches on ``args.transport``:
 
     - ``stdio`` -> ``DesktopConfig`` using the ``--oidc-*`` flags.
-    - ``http`` -> ``WebConfig`` using ``--auth-provider`` plus the relevant
+    - ``http`` -> ``WebConfig`` using ``--inbound-auth-provider`` plus the relevant
       per-provider and outbound flags. Per-provider required-field
       validation lives in ``WebConfig.__post_init__``; missing transport-
-      level fields (e.g. ``--base-url``) are caught here.
+      level fields (e.g. ``--proxy-base-url``) are caught here.
 
     Raises:
         ValueError: If required transport-level fields are missing.
@@ -352,19 +352,19 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
         )
 
     # http
-    if not args.base_url:
+    if not args.proxy_base_url:
         raise ValueError(
-            "--base-url (or BASE_URL env var) is required for --transport http"
+            "--proxy-base-url (or MCP_PROXY_BASE_URL env var) is required for --transport http"
         )
-    if not args.auth_provider:
+    if not args.inbound_auth_provider:
         raise ValueError(
-            "--auth-provider (or AUTH_PROVIDER env var) is required for "
+            "--inbound-auth-provider (or INBOUND_AUTH_PROVIDER env var) is required for "
             "--transport http"
         )
 
     return WebConfig(
-        auth_provider=args.auth_provider,
-        base_url=args.base_url,
+        inbound_auth_provider=args.inbound_auth_provider,
+        proxy_base_url=args.proxy_base_url,
         client_id=args.oidc_client_id,
         client_secret=args.oidc_client_secret,
         scopes=args.oidc_scopes,
@@ -380,10 +380,10 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
         outbound_token_url=args.outbound_token_url,
         outbound_header_name=args.outbound_header_name or "Authorization",
         outbound_header_value=args.outbound_header_value,
-        server_name=args.server_name,
-        server_version=args.server_version,
-        server_instructions=args.server_instructions,
-        server_website_url=args.server_website_url,
+        proxy_name=args.proxy_name,
+        proxy_version=args.proxy_version,
+        proxy_instructions=args.proxy_instructions,
+        proxy_website_url=args.proxy_website_url,
     )
 
 
@@ -509,7 +509,7 @@ def log_error_and_exit(exc: BaseException) -> None:
 
 def main():
     """
-    Main entry point for the Authful MCP Proxy application.
+    Main entry point for the Authsome MCP Proxy application.
 
     Parses configuration, builds the appropriate ProxyConfig (DesktopConfig for
     stdio mode, WebConfig for http mode), and launches the proxy server. Handles
@@ -536,7 +536,7 @@ def main():
         # Start the MCP proxy
         asyncio.run(
             mcp_proxy.run_async(
-                backend_url=args.mcp_backend_url,
+                upstream_url=args.upstream_mcp_url,
                 config=config,
                 show_banner=not args.no_banner,
                 **transport_kwargs,

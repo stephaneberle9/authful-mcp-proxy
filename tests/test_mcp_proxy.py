@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from authful_mcp_proxy import mcp_proxy
-from authful_mcp_proxy.config import DesktopConfig, WebConfig
+from authsome_mcp_proxy import mcp_proxy
+from authsome_mcp_proxy.config import DesktopConfig, WebConfig
 
 # ---------------------------------------------------------------------------
 # Desktop (stdio) mode
@@ -12,9 +12,9 @@ from authful_mcp_proxy.config import DesktopConfig, WebConfig
 
 @pytest.mark.asyncio
 async def test_run_async_desktop_relays_server_info():
-    """Desktop mode connects once to relay backend name/version/etc., then
+    """Desktop mode connects once to relay upstream name/version/etc., then
     creates a fresh disconnected client for create_proxy. Transport is stdio."""
-    backend_url = "http://backend:8080"
+    upstream_url = "http://upstream:8080"
     desktop_config = DesktopConfig(
         issuer_url="https://auth.example.com", client_id="test-client"
     )
@@ -32,8 +32,8 @@ async def test_run_async_desktop_relays_server_info():
                 return self._data.copy()
             return {k: v for k, v in self._data.items() if k not in exclude}
 
-    with patch("authful_mcp_proxy.mcp_proxy.ExternalOIDCAuth"):
-        with patch("authful_mcp_proxy.mcp_proxy.Client") as mock_client_cls:
+    with patch("authsome_mcp_proxy.mcp_proxy.ExternalOIDCAuth"):
+        with patch("authsome_mcp_proxy.mcp_proxy.Client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
 
@@ -59,12 +59,14 @@ async def test_run_async_desktop_relays_server_info():
             mock_client.initialize_result = mock_init_result
             mock_client_cls.return_value = mock_client
 
-            with patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy:
+            with patch(
+                "authsome_mcp_proxy.mcp_proxy.create_proxy"
+            ) as mock_create_proxy:
                 mock_proxy_server = AsyncMock()
                 mock_create_proxy.return_value = mock_proxy_server
 
                 await mcp_proxy.run_async(
-                    backend_url, desktop_config, show_banner=False
+                    upstream_url, desktop_config, show_banner=False
                 )
 
                 # create_proxy was called with the relayed (filtered) properties
@@ -97,14 +99,14 @@ async def test_run_async_desktop_relays_server_info():
 @pytest.mark.asyncio
 async def test_run_async_desktop_uses_fresh_proxy_client():
     """create_proxy receives a fresh disconnected client (not the connected info
-    client), so each incoming MCP session gets an isolated backend connection."""
-    backend_url = "http://backend:8080"
+    client), so each incoming MCP session gets an isolated upstream connection."""
+    upstream_url = "http://upstream:8080"
     desktop_config = DesktopConfig(
         issuer_url="https://auth.example.com", client_id="test-client"
     )
 
-    with patch("authful_mcp_proxy.mcp_proxy.ExternalOIDCAuth"):
-        with patch("authful_mcp_proxy.mcp_proxy.Client") as mock_client_cls:
+    with patch("authsome_mcp_proxy.mcp_proxy.ExternalOIDCAuth"):
+        with patch("authsome_mcp_proxy.mcp_proxy.Client") as mock_client_cls:
             info_client = AsyncMock()
             info_client.__aenter__.return_value = info_client
             info_client.initialize_result = None
@@ -114,12 +116,14 @@ async def test_run_async_desktop_uses_fresh_proxy_client():
             # First Client(...) call → info connection; second → disconnected proxy client.
             mock_client_cls.side_effect = [info_client, proxy_client]
 
-            with patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy:
+            with patch(
+                "authsome_mcp_proxy.mcp_proxy.create_proxy"
+            ) as mock_create_proxy:
                 mock_proxy_server = AsyncMock()
                 mock_create_proxy.return_value = mock_proxy_server
 
                 await mcp_proxy.run_async(
-                    backend_url, desktop_config, show_banner=False
+                    upstream_url, desktop_config, show_banner=False
                 )
 
                 assert mock_client_cls.call_count == 2
@@ -137,10 +141,10 @@ async def test_run_async_desktop_uses_fresh_proxy_client():
 async def test_run_async_web_wires_inbound_and_outbound_auth():
     """Web mode skips the info-relay step, plugs inbound auth into create_proxy
     via auth=, and attaches outbound auth to the per-session Client."""
-    backend_url = "http://backend:8080"
+    upstream_url = "http://upstream:8080"
     web_config = WebConfig(
-        auth_provider="keycloak",
-        base_url="https://mcp.example.com",
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
         issuer_url="https://kc.example.com/realms/r",
     )
 
@@ -149,15 +153,15 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
 
     with (
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_inbound_auth",
+            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth",
             return_value=sentinel_inbound,
         ) as mock_build_inbound,
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_outbound_auth",
+            "authsome_mcp_proxy.mcp_proxy.build_outbound_auth",
             return_value=sentinel_outbound,
         ) as mock_build_outbound,
-        patch("authful_mcp_proxy.mcp_proxy.Client") as mock_client_cls,
-        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy.Client") as mock_client_cls,
+        patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
     ):
         proxy_client = AsyncMock()
         mock_client_cls.return_value = proxy_client
@@ -165,7 +169,7 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
 
-        await mcp_proxy.run_async(backend_url, web_config, show_banner=False)
+        await mcp_proxy.run_async(upstream_url, web_config, show_banner=False)
 
         # Inbound + outbound factories called exactly once each with the config.
         mock_build_inbound.assert_called_once_with(web_config)
@@ -197,33 +201,33 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
 
 @pytest.mark.asyncio
 async def test_run_async_web_forwards_server_identity_kwargs():
-    """Operator-configured server_name/version/instructions/website_url land on
+    """Operator-configured proxy_name/version/instructions/website_url land on
     create_proxy as the matching kwargs, so the proxy advertises them to
     downstream MCP clients instead of FastMCP's auto-generated name."""
     web_config = WebConfig(
-        auth_provider="keycloak",
-        base_url="https://mcp.example.com",
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
         issuer_url="https://kc.example.com/realms/r",
-        server_name="ANALYZE",
-        server_version="2.3.0",
-        server_instructions="Use these tools for traceability analysis.",
-        server_website_url="https://analyze.example.com",
+        proxy_name="ANALYZE",
+        proxy_version="2.3.0",
+        proxy_instructions="Use these tools for traceability analysis.",
+        proxy_website_url="https://analyze.example.com",
     )
 
     with (
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
         ),
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
-        patch("authful_mcp_proxy.mcp_proxy.Client"),
-        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy.Client"),
+        patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
 
-        await mcp_proxy.run_async("http://backend:8080", web_config, show_banner=False)
+        await mcp_proxy.run_async("http://upstream:8080", web_config, show_banner=False)
 
         cp_kwargs = mock_create_proxy.call_args.kwargs
         assert cp_kwargs["name"] == "ANALYZE"
@@ -236,26 +240,26 @@ async def test_run_async_web_forwards_server_identity_kwargs():
 async def test_run_async_web_omits_unset_server_identity_kwargs():
     """When only some server-identity fields are set, only those are passed."""
     web_config = WebConfig(
-        auth_provider="keycloak",
-        base_url="https://mcp.example.com",
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
         issuer_url="https://kc.example.com/realms/r",
-        server_name="ANALYZE",  # only this one set
+        proxy_name="ANALYZE",  # only this one set
     )
 
     with (
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
         ),
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
-        patch("authful_mcp_proxy.mcp_proxy.Client"),
-        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy.Client"),
+        patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
 
-        await mcp_proxy.run_async("http://backend:8080", web_config, show_banner=False)
+        await mcp_proxy.run_async("http://upstream:8080", web_config, show_banner=False)
 
         cp_kwargs = mock_create_proxy.call_args.kwargs
         assert cp_kwargs["name"] == "ANALYZE"
@@ -267,28 +271,28 @@ async def test_run_async_web_omits_unset_server_identity_kwargs():
 @pytest.mark.asyncio
 async def test_run_async_web_forwards_transport_kwargs():
     """host/port/log_level transport_kwargs are forwarded verbatim to FastMCP."""
-    backend_url = "http://backend:8080"
+    upstream_url = "http://upstream:8080"
     web_config = WebConfig(
-        auth_provider="keycloak",
-        base_url="https://mcp.example.com",
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
         issuer_url="https://kc.example.com/realms/r",
     )
 
     with (
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
         ),
         patch(
-            "authful_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
+            "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
-        patch("authful_mcp_proxy.mcp_proxy.Client"),
-        patch("authful_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy.Client"),
+        patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
 
         await mcp_proxy.run_async(
-            backend_url,
+            upstream_url,
             web_config,
             show_banner=False,
             host="0.0.0.0",
@@ -319,7 +323,7 @@ async def test_run_async_rejects_unknown_config_type():
 
     with pytest.raises(TypeError, match="Unsupported config type"):
         await mcp_proxy.run_async(
-            "http://backend:8080",
+            "http://upstream:8080",
             NotAConfig(),  # ty: ignore[invalid-argument-type]
             show_banner=False,
         )

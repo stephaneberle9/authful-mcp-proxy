@@ -1,4 +1,4 @@
-"""Tests for authful_mcp_proxy.external_oidc module."""
+"""Tests for authsome_mcp_proxy.external_oidc module."""
 
 import logging
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from authful_mcp_proxy.external_oidc import (
+from authsome_mcp_proxy.external_oidc import (
     ExternalOIDCAuth,
     OIDCContext,
     _setup_token_refresh_logging,
@@ -309,7 +309,7 @@ class TestTokenRefreshLogging:
 
     def test_setup_token_refresh_logging_creates_file_handler(self, tmp_path):
         """Test that _setup_token_refresh_logging creates a file handler in the cache directory."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -328,14 +328,14 @@ class TestTokenRefreshLogging:
         assert isinstance(external_oidc._token_refresh_log_handler, logging.FileHandler)
 
         # Clean up
-        logger = logging.getLogger("authful_mcp_proxy.external_oidc")
+        logger = logging.getLogger("authsome_mcp_proxy.external_oidc")
         if external_oidc._token_refresh_log_handler:
             logger.removeHandler(external_oidc._token_refresh_log_handler)
         external_oidc._token_refresh_log_handler = None
 
     def test_setup_token_refresh_logging_only_runs_once(self, tmp_path):
         """Test that _setup_token_refresh_logging only sets up logging once."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -354,14 +354,14 @@ class TestTokenRefreshLogging:
         assert first_handler is second_handler
 
         # Clean up
-        logger = logging.getLogger("authful_mcp_proxy.external_oidc")
+        logger = logging.getLogger("authsome_mcp_proxy.external_oidc")
         if external_oidc._token_refresh_log_handler:
             logger.removeHandler(external_oidc._token_refresh_log_handler)
         external_oidc._token_refresh_log_handler = None
 
     def test_setup_token_refresh_logging_creates_log_file(self, tmp_path):
         """Test that log file is created at the correct path."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -376,14 +376,14 @@ class TestTokenRefreshLogging:
         assert log_file.is_file()
 
         # Clean up
-        logger = logging.getLogger("authful_mcp_proxy.external_oidc")
+        logger = logging.getLogger("authsome_mcp_proxy.external_oidc")
         if external_oidc._token_refresh_log_handler:
             logger.removeHandler(external_oidc._token_refresh_log_handler)
         external_oidc._token_refresh_log_handler = None
 
     def test_setup_token_refresh_logging_handler_config(self, tmp_path):
         """Test that the file handler is configured correctly."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -406,14 +406,14 @@ class TestTokenRefreshLogging:
         assert formatter.datefmt == "%Y-%m-%d %H:%M:%S"
 
         # Clean up
-        logger = logging.getLogger("authful_mcp_proxy.external_oidc")
+        logger = logging.getLogger("authsome_mcp_proxy.external_oidc")
         if external_oidc._token_refresh_log_handler:
             logger.removeHandler(external_oidc._token_refresh_log_handler)
         external_oidc._token_refresh_log_handler = None
 
     def test_logging_writes_to_file(self, tmp_path):
         """Test that log messages are actually written to the file."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -424,7 +424,7 @@ class TestTokenRefreshLogging:
         _setup_token_refresh_logging(cache_dir)
 
         # Write a log message
-        logger = logging.getLogger("authful_mcp_proxy.external_oidc")
+        logger = logging.getLogger("authsome_mcp_proxy.external_oidc")
         # Ensure logger level allows DEBUG messages
         original_level = logger.level
         logger.setLevel(logging.DEBUG)
@@ -450,7 +450,7 @@ class TestTokenRefreshLogging:
 
     def test_external_oidc_auth_calls_setup_logging(self, tmp_path):
         """Test that ExternalOIDCAuth calls _setup_token_refresh_logging during init."""
-        from authful_mcp_proxy import external_oidc
+        from authsome_mcp_proxy import external_oidc
 
         # Reset global state
         external_oidc._token_refresh_log_handler = None
@@ -458,10 +458,10 @@ class TestTokenRefreshLogging:
         # Mock both the OIDC config fetch and the setup_logging call
         with (
             patch(
-                "authful_mcp_proxy.external_oidc._setup_token_refresh_logging"
+                "authsome_mcp_proxy.external_oidc._setup_token_refresh_logging"
             ) as mock_setup,
             patch(
-                "authful_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
+                "authsome_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
             ) as mock_get_config,
         ):
             # Mock the OIDC config response
@@ -513,7 +513,7 @@ class TestTokenRefresh:
         )
 
         # Set existing tokens with a refresh token
-        from authful_mcp_proxy.external_oidc import OAuthToken
+        from authsome_mcp_proxy.external_oidc import OAuthToken
 
         existing_tokens = OAuthToken(
             access_token="old-access-token",
@@ -536,7 +536,7 @@ class TestTokenRefresh:
         # Create ExternalOIDCAuth and test _refresh_tokens
         with (
             patch(
-                "authful_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
+                "authsome_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
             ) as mock_get_config,
             patch("httpx.AsyncClient.post", return_value=mock_response),
         ):
@@ -583,7 +583,7 @@ class TestTokenRefresh:
         )
 
         # Set existing tokens
-        from authful_mcp_proxy.external_oidc import OAuthToken
+        from authsome_mcp_proxy.external_oidc import OAuthToken
 
         existing_tokens = OAuthToken(
             access_token="old-access-token",
@@ -606,7 +606,7 @@ class TestTokenRefresh:
         # Create ExternalOIDCAuth and test _refresh_tokens
         with (
             patch(
-                "authful_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
+                "authsome_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
             ) as mock_get_config,
             patch("httpx.AsyncClient.post", return_value=mock_response),
         ):
@@ -653,7 +653,7 @@ class TestTokenRefresh:
         )
 
         # Set existing tokens
-        from authful_mcp_proxy.external_oidc import OAuthToken
+        from authsome_mcp_proxy.external_oidc import OAuthToken
 
         existing_tokens = OAuthToken(
             access_token="old-access-token",
@@ -677,7 +677,7 @@ class TestTokenRefresh:
         # Create ExternalOIDCAuth and test _refresh_tokens
         with (
             patch(
-                "authful_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
+                "authsome_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
             ) as mock_get_config,
             patch("httpx.AsyncClient.post", return_value=mock_response),
         ):
@@ -720,7 +720,7 @@ class TestTokenRefresh:
 
         # Create ExternalOIDCAuth
         with patch(
-            "authful_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
+            "authsome_mcp_proxy.external_oidc.OIDCConfiguration.get_oidc_configuration"
         ) as mock_get_config:
             mock_get_config.return_value = mock_oidc_config
 

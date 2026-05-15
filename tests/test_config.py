@@ -1,8 +1,8 @@
-"""Tests for authful_mcp_proxy.config module."""
+"""Tests for authsome_mcp_proxy.config module."""
 
 import pytest
 
-from authful_mcp_proxy.config import DesktopConfig, WebConfig
+from authsome_mcp_proxy.config import DesktopConfig, WebConfig
 
 
 class TestDesktopConfig:
@@ -48,13 +48,16 @@ class TestWebConfigInbound:
 
     def test_keycloak_requires_issuer_url(self):
         with pytest.raises(ValueError, match="keycloak.*issuer_url"):
-            WebConfig(auth_provider="keycloak", base_url="https://mcp.example.com")
+            WebConfig(
+                inbound_auth_provider="keycloak",
+                proxy_base_url="https://mcp.example.com",
+            )
 
     def test_keycloak_does_not_require_client_id(self):
         # RemoteAuthProvider mode: no client credentials needed on the proxy.
         config = WebConfig(
-            auth_provider="keycloak",
-            base_url="https://mcp.example.com",
+            inbound_auth_provider="keycloak",
+            proxy_base_url="https://mcp.example.com",
             issuer_url="https://kc.example.com/realms/r",
         )
         assert config.client_id is None
@@ -62,11 +65,13 @@ class TestWebConfigInbound:
 
     def test_oidc_requires_issuer_and_client_id(self):
         with pytest.raises(ValueError, match="oidc.*issuer_url"):
-            WebConfig(auth_provider="oidc", base_url="https://mcp.example.com")
+            WebConfig(
+                inbound_auth_provider="oidc", proxy_base_url="https://mcp.example.com"
+            )
         with pytest.raises(ValueError, match="oidc.*client_id"):
             WebConfig(
-                auth_provider="oidc",
-                base_url="https://mcp.example.com",
+                inbound_auth_provider="oidc",
+                proxy_base_url="https://mcp.example.com",
                 issuer_url="https://idp.example.com",
             )
 
@@ -75,12 +80,15 @@ class TestWebConfigInbound:
             ValueError,
             match="aws-cognito.*client_id.*client_secret.*cognito_user_pool_id.*cognito_aws_region",
         ):
-            WebConfig(auth_provider="aws-cognito", base_url="https://mcp.example.com")
+            WebConfig(
+                inbound_auth_provider="aws-cognito",
+                proxy_base_url="https://mcp.example.com",
+            )
 
     def test_aws_cognito_happy_path(self):
         config = WebConfig(
-            auth_provider="aws-cognito",
-            base_url="https://mcp.example.com",
+            inbound_auth_provider="aws-cognito",
+            proxy_base_url="https://mcp.example.com",
             client_id="cid",
             client_secret="csec",
             cognito_user_pool_id="eu-central-1_abc",
@@ -90,27 +98,29 @@ class TestWebConfigInbound:
 
     def test_google_requires_client_id(self):
         with pytest.raises(ValueError, match="google.*client_id"):
-            WebConfig(auth_provider="google", base_url="https://mcp.example.com")
+            WebConfig(
+                inbound_auth_provider="google", proxy_base_url="https://mcp.example.com"
+            )
 
     def test_azure_requires_tenant_and_scopes(self):
         with pytest.raises(ValueError, match="azure.*azure_tenant_id"):
             WebConfig(
-                auth_provider="azure",
-                base_url="https://mcp.example.com",
+                inbound_auth_provider="azure",
+                proxy_base_url="https://mcp.example.com",
                 client_id="cid",
             )
         with pytest.raises(ValueError, match="azure.*scopes"):
             WebConfig(
-                auth_provider="azure",
-                base_url="https://mcp.example.com",
+                inbound_auth_provider="azure",
+                proxy_base_url="https://mcp.example.com",
                 client_id="cid",
                 azure_tenant_id="tid",
             )
 
     def test_azure_happy_path(self):
         config = WebConfig(
-            auth_provider="azure",
-            base_url="https://mcp.example.com",
+            inbound_auth_provider="azure",
+            proxy_base_url="https://mcp.example.com",
             client_id="cid",
             azure_tenant_id="tid",
             scopes="user.read",
@@ -123,8 +133,8 @@ class TestWebConfigOutbound:
 
     def _base_keycloak_kwargs(self) -> dict:
         return {
-            "auth_provider": "keycloak",
-            "base_url": "https://mcp.example.com",
+            "inbound_auth_provider": "keycloak",
+            "proxy_base_url": "https://mcp.example.com",
             "issuer_url": "https://kc.example.com/realms/r",
         }
 

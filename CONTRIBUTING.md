@@ -12,7 +12,7 @@ Contributing
   - [With MCP Inspector](#with-mcp-inspector)
   - [With Claude Desktop](#with-claude-desktop)
   - [With Claude Code](#with-claude-code)
-  - [With Minimal Token-Validating MCP Backend Example](#with-minimal-token-validating-mcp-backend-example)
+  - [With Minimal Token-Validating Upstream MCP Example](#with-minimal-token-validating-upstream-mcp-example)
 - [Code Quality](#code-quality)
   - [Enable automatic execution on git commit](#enable-automatic-execution-on-git-commit)
   - [Manual execution](#manual-execution)
@@ -70,9 +70,9 @@ Running the Server
 source ./.venv/bin/activate  # Linux/macOS
 
 # Run the MCP proxy server (see --help for CLI options)
-authful-mcp-proxy [options] https://mcp-backend.company.com/mcp
+authsome-mcp-proxy [options] https://mcp-upstream.company.com/mcp
 # or
-uv run --env-file .env authful-mcp-proxy [options]
+uv run --env-file .env authsome-mcp-proxy [options]
 
 # Stop the server
 # Press Ctrl+C to exit
@@ -85,10 +85,10 @@ deactivate
 
 ```bash
 # Run the MCP server directly from the sources (see --help for CLI options)
-uv run --env-file /path/to/authful-mcp-proxy/.env --project "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
+uv run --env-file /path/to/authsome-mcp-proxy/.env --project "/path/to/authsome-mcp-proxy" authsome-mcp-proxy [options]
 
 # Run as editable install to enable live code reloading during development (see --help for CLI options)
-uv run --env-file /path/to/authful-mcp-proxy/.env --with-editable "/path/to/authful-mcp-proxy" authful-mcp-proxy [options]
+uv run --env-file /path/to/authsome-mcp-proxy/.env --with-editable "/path/to/authsome-mcp-proxy" authsome-mcp-proxy [options]
 ```
 
 ### As Web Connector Proxy (HTTP Transport)
@@ -101,12 +101,12 @@ Run the dev build as a persistent HTTP server instead of the default stdio trans
 source ./.venv/bin/activate  # Linux/macOS
 
 # Run with HTTP transport (binds to localhost:8000 by default)
-authful-mcp-proxy --transport http --port 8000 \
+authsome-mcp-proxy --transport http --port 8000 \
   --oidc-issuer-url https://auth.example.com \
   --oidc-client-id my-client-id \
-  https://mcp-backend.example.com/mcp
+  https://mcp-upstream.example.com/mcp
 # or
-uv run --env-file .env authful-mcp-proxy --transport http --port 8000
+uv run --env-file .env authsome-mcp-proxy --transport http --port 8000
 ```
 
 The proxy authenticates via browser on first run, then serves MCP over HTTP at `http://localhost:8000/mcp`. Connect any MCP client to that URL while the server is running.
@@ -120,14 +120,14 @@ Create an `mcp.json` file containing:
 ```jsonc
 {
   "mcpServers": {
-    "authful-mcp-proxy": {
+    "authsome-mcp-proxy": {
       "command": "uv",
       "args": [
         "run",
         "--env-file", // optional, can also be provided via "env" object
         ".env",
-        "authful-mcp-proxy",
-        "https://mcp-backend.company.com/mcp"
+        "authsome-mcp-proxy",
+        "https://mcp-upstream.company.com/mcp"
       ],
       // Optional, can also be provided via .env file
       "env": {
@@ -146,14 +146,14 @@ From a terminal, start the MCP Inspector:
 
 ```bash
 # Start and open MCP Inspector in your browser
-npx -y @modelcontextprotocol/inspector --config mcp.json --server authful-mcp-proxy
+npx -y @modelcontextprotocol/inspector --config mcp.json --server authsome-mcp-proxy
 ```
 
-In your browser, connect to your MCP proxy server, authenticate and use the tools, resources and prompts of the backend MCP server:
+In your browser, connect to your MCP proxy server, authenticate and use the tools, resources and prompts of the upstream MCP server:
 
 - Connect to MCP proxy server: `Connect`
 - Sign up/sign in and approve required scopes as needed
-- List tools of backend MCP server: `Tools` > `List Tools`
+- List tools of upstream MCP server: `Tools` > `List Tools`
 - Find MCP proxy server logs under `Server Notifications`
 
 **HTTP (connecting to a running proxy):**
@@ -174,16 +174,16 @@ Add the following to your Claude Desktop configuration file (`claude_desktop_con
 ```jsonc
 {
   "mcpServers": {
-    "authful-mcp-proxy": {
+    "authsome-mcp-proxy": {
       "command": "uv",
       "args": [
         "run",
         "--env-file", // optional, can also be provided via "env" object
-        "/path/to/authful-mcp-proxy/.env",
+        "/path/to/authsome-mcp-proxy/.env",
         "--with-editable",
-        "/path/to/authful-mcp-proxy",
-        "authful-mcp-proxy",
-        "https://mcp-backend.company.com/mcp"
+        "/path/to/authsome-mcp-proxy",
+        "authsome-mcp-proxy",
+        "https://mcp-upstream.company.com/mcp"
       ],
       // Optional, can also be provided via .env file
       "env": {
@@ -201,36 +201,36 @@ Add the following to your Claude Desktop configuration file (`claude_desktop_con
 After saving the configuration, restart Claude Desktop. Then:
 
 - Sign up/sign in and approve required scopes as needed
-- Open a new chat, click `+` and verify that `authful-mcp-proxy` appears under `Connectors`
-- Use the tools, resources and prompts of the backend MCP server
+- Open a new chat, click `+` and verify that `authsome-mcp-proxy` appears under `Connectors`
+- Use the tools, resources and prompts of the upstream MCP server
 
 If an error popup appears, open the MCP server logs to diagnose the issue:
 
-- **Windows**: `%LOCALAPPDATA%\Claude\Logs\mcp-server-authful-mcp-proxy.log`
-- **macOS**: `~/Library/Logs/Claude/mcp-server-authful-mcp-proxy.log`
+- **Windows**: `%LOCALAPPDATA%\Claude\Logs\mcp-server-authsome-mcp-proxy.log`
+- **macOS**: `~/Library/Logs/Claude/mcp-server-authsome-mcp-proxy.log`
 
-Alternatively, go to `Settings` > `Developer` > select `authful-mcp-proxy` > `Open Logs Folder`.
+Alternatively, go to `Settings` > `Developer` > select `authsome-mcp-proxy` > `Open Logs Folder`.
 
 ### With Claude Code
 
 **Stdio (Claude Code launches the proxy as a subprocess):**
 
 ```bash
-claude mcp add --transport stdio authful-mcp-proxy -- \
-  uv run --with-editable /path/to/authful-mcp-proxy authful-mcp-proxy \
+claude mcp add --transport stdio authsome-mcp-proxy -- \
+  uv run --with-editable /path/to/authsome-mcp-proxy authsome-mcp-proxy \
   --oidc-issuer-url https://auth.company.com \
   --oidc-client-id your-client-id \
-  https://mcp-backend.company.com/mcp
+  https://mcp-upstream.company.com/mcp
 ```
 
 Or using an `.env` file for credentials:
 
 ```bash
-claude mcp add --transport stdio authful-mcp-proxy -- \
-  uv run --env-file /path/to/authful-mcp-proxy/.env \
-  --with-editable /path/to/authful-mcp-proxy \
-  authful-mcp-proxy \
-  https://mcp-backend.company.com/mcp
+claude mcp add --transport stdio authsome-mcp-proxy -- \
+  uv run --env-file /path/to/authsome-mcp-proxy/.env \
+  --with-editable /path/to/authsome-mcp-proxy \
+  authsome-mcp-proxy \
+  https://mcp-upstream.company.com/mcp
 ```
 
 **HTTP (connecting to a running dev proxy):**
@@ -238,16 +238,16 @@ claude mcp add --transport stdio authful-mcp-proxy -- \
 Start the proxy in HTTP mode first (see [As Web Connector Proxy](#as-web-connector-proxy-http-transport)), then register it:
 
 ```bash
-claude mcp add --transport http authful-mcp-proxy http://localhost:8000/mcp
+claude mcp add --transport http authsome-mcp-proxy http://localhost:8000/mcp
 ```
 
-### With Minimal Token-Validating MCP Backend Example
+### With Minimal Token-Validating Upstream MCP Example
 
-For quick testing without a real remote MCP server, run the minimal token-validating MCP backend example:
+For quick testing without a real remote MCP server, run the minimal token-validating upstream MCP example:
 
 ```bash
-# Change to example MCP backend directory
-cd examples/token_validating_mcp_backend
+# Change to example upstream MCP directory
+cd examples/token_validating_upstream_mcp
 
 # Create virtual environment
 uv venv
@@ -260,7 +260,7 @@ source ./.venv/bin/activate  # Linux/macOS
 uv pip install -r requirements.txt
 
 # Run the minimal example MCP client
-uv run --env-file .env mcp_backend.py
+uv run --env-file .env upstream_mcp.py
 ```
 
 Code Quality
@@ -324,7 +324,7 @@ uv run pytest
 uv run pytest -v
 
 # Run with coverage report output to terminal and enforce minimum coverage
-uv run pytest --cov=src/authful_mcp_proxy --cov-report=term-missing --cov-fail-under=65
+uv run pytest --cov=src/authsome_mcp_proxy --cov-report=term-missing --cov-fail-under=65
 
 # Run specific test file
 uv run pytest tests/test_main.py
@@ -426,24 +426,24 @@ uv sync --no-dev
 uv build
 ```
 
-This will create a `dist` folder containing an `authful_mcp_proxy X.X.X.tar.gz` and an `authful_mcp_proxy X.X.X-py3-none-any.whl` file.
+This will create a `dist` folder containing an `authsome_mcp_proxy X.X.X.tar.gz` and an `authsome_mcp_proxy X.X.X-py3-none-any.whl` file.
 
 Dependency Management and Lock Files
 -------------------------------------
 
 ### Why `uvx` Doesn't Use `uv.lock`
 
-When users run `uvx authful-mcp-proxy`, the `uv.lock` file is **not used**. This is by design and is standard Python packaging practice:
+When users run `uvx authsome-mcp-proxy`, the `uv.lock` file is **not used**. This is by design and is standard Python packaging practice:
 
 1. **Wheels don't contain lock files**: When publishing to PyPI, the wheel format (preferred by installers) only contains package code, metadata from `pyproject.toml`, and licenses. The `uv.lock` file is deliberately excluded from wheels.
 
 2. **Lock files are development tools**: The `uv.lock` file ensures reproducible development environments when using `uv sync`. It's not part of the PEP 517/621 distribution metadata standard.
 
-3. **uvx creates ephemeral environments**: When running `uvx authful-mcp-proxy`, it downloads the package from PyPI, creates a temporary virtual environment, and resolves dependencies from package metadata (derived from `pyproject.toml`). No mechanism exists to read or use lock files from the installed package.
+3. **uvx creates ephemeral environments**: When running `uvx authsome-mcp-proxy`, it downloads the package from PyPI, creates a temporary virtual environment, and resolves dependencies from package metadata (derived from `pyproject.toml`). No mechanism exists to read or use lock files from the installed package.
 
 ### Ensuring Compatibility for `uvx` Users
 
-To ensure users get compatible dependency versions when running `uvx authful-mcp-proxy`, we use **version constraints in `pyproject.toml`**:
+To ensure users get compatible dependency versions when running `uvx authsome-mcp-proxy`, we use **version constraints in `pyproject.toml`**:
 
 ```toml
 dependencies = [
