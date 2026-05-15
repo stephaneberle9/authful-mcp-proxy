@@ -1,7 +1,7 @@
 [project]
 name = "authsome-mcp-proxy"
 dynamic = ["version"]
-description = "A Model Context Protocol (MCP) proxy that bridges upstream MCP servers protected by token validation or static credentials to MCP clients such as Claude Desktop, Claude Code, Cursor, Codex, MCP Inspector, and Claude.ai."
+description = "A Model Context Protocol (MCP) proxy that adds an OAuth/OIDC frontend to upstream MCPs that don't include any such — either because they only validate tokens or expect static credentials such as API keys. Bridges to a configurable IdP (Keycloak, AWS Cognito, Google, Azure, generic OIDC) for Claude Desktop, Claude Code, Cursor, Codex, Claude.ai."
 readme = "README.md"
 authors = [
     { name = "Stephan Eberle", email = "stephaneberle9@gmail.com" }
