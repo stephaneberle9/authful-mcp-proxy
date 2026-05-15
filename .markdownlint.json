@@ -1,5 +1,5 @@
 {
-  "MD003": { "style": "setext_with_atx" },
+  "MD003": { "style": "atx" },
   "MD013": false,
   "MD036": false
 }
