@@ -155,6 +155,15 @@ Browser           MCP Client (Claude.ai/Code/Inspector)
    └─── Same IdP issues tokens both sides validate ─────────┘
 ```
 
+The proxy wears two OAuth 2.0 hats at the same time: it is an **OAuth 2.0
+client** against the upstream IdP / Authorization Server, and a
+**DCR-enabled OAuth 2.0 Authorization Server** for the MCP client. The
+only way it diverges from a stock AS is that it does not mint its own
+tokens — it forwards the upstream IdP's tokens through transparently,
+which is what makes `OUTBOUND_AUTH=forward` work end-to-end. For the full
+sequence diagram, persistence model, and pod-restart implications, see
+[docs/oauth-flow.md](docs/oauth-flow.md).
+
 The proxy is IdP-agnostic — pick the inbound provider that matches your
 deployment via `--inbound-auth-provider`. The following sections give a
 working example for each.
