@@ -1,14 +1,14 @@
 [project]
-name = "authful-mcp-proxy"
+name = "authsome-mcp-proxy"
 dynamic = ["version"]
-description = "A Model Context Protocol (MCP) proxy server that performs OIDC authentication to obtain access tokens for remote MCP servers protected by token validation, and bridges HTTP transport to local stdio for MCP clients like Claude Desktop."
+description = "A Model Context Protocol (MCP) proxy that adds an OAuth/OIDC frontend to upstream MCPs that don't include any such — either because they only validate tokens or expect static credentials such as API keys. Bridges to a configurable IdP (Keycloak, AWS Cognito, Google, Azure, generic OIDC) for Claude Desktop, Claude Code, Cursor, Codex, Claude.ai."
 readme = "README.md"
 authors = [
     { name = "Stephan Eberle", email = "stephaneberle9@gmail.com" }
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp>=3.2.3",
+    "fastmcp>=3.2.4",
     "py-key-value-aio[disk]>=0.3.0",
 ]
 
@@ -29,7 +29,7 @@ test = [
 ]
 
 [project.scripts]
-authful-mcp-proxy = "authful_mcp_proxy.__main__:main"
+authsome-mcp-proxy = "authsome_mcp_proxy.__main__:main"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
@@ -73,7 +73,7 @@ extend-select = ["I", "UP"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "I001", "RUF013"]
 # allow imports not at the top of the file
-"src/authful_mcp_proxy/__init__.py" = ["E402"]
+"src/authsome_mcp_proxy/__init__.py" = ["E402"]
 
 [tool.codespell]
 skip = "*.lock,pyproject.toml,*PythonImportHelper*"
@@ -86,7 +86,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=authful_mcp_proxy",
+    "--cov=authsome_mcp_proxy",
     "--cov-report=term-missing",
     "--cov-report=html",
 ]

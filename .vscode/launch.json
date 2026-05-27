@@ -8,8 +8,8 @@
       "name": "MCP Backend",
       "type": "debugpy",
       "request": "launch",
-      "python": "${workspaceFolder}/examples/token_validating_mcp_backend/.venv/Scripts/python.exe",
-      "program": "${workspaceFolder}/examples/token_validating_mcp_backend/mcp_backend.py",
+      "python": "${workspaceFolder}/examples/token_validating_upstream_mcp/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/examples/token_validating_upstream_mcp/upstream_mcp.py",
       "justMyCode": false,
       "console": "integratedTerminal"
     }

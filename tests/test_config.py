@@ -1,26 +1,15 @@
-"""Tests for authful_mcp_proxy.config module."""
+"""Tests for authsome_mcp_proxy.config module."""
 
-from authful_mcp_proxy.config import OIDCConfig
+import pytest
+
+from authsome_mcp_proxy.config import DesktopConfig, WebConfig
 
 
-class TestOIDCConfig:
-    """Test OIDCConfig dataclass."""
+class TestDesktopConfig:
+    """Tests for the stdio-mode DesktopConfig dataclass."""
 
-    def test_default_values(self):
-        """Test that OIDCConfig initializes with None defaults for optional fields."""
-        config = OIDCConfig(
-            issuer_url="https://auth.example.com", client_id="test-client"
-        )
-
-        assert config.issuer_url == "https://auth.example.com"
-        assert config.client_id == "test-client"
-        assert config.client_secret is None
-        assert config.scopes is None
-        assert config.redirect_url is None
-
-    def test_partial_initialization(self):
-        """Test OIDCConfig with some values set."""
-        config = OIDCConfig(
+    def test_minimal_required_fields(self):
+        config = DesktopConfig(
             issuer_url="https://auth.example.com", client_id="test-client"
         )
 
@@ -31,8 +20,7 @@ class TestOIDCConfig:
         assert config.redirect_url is None
 
     def test_full_initialization(self):
-        """Test OIDCConfig with all values set."""
-        config = OIDCConfig(
+        config = DesktopConfig(
             issuer_url="https://auth.example.com",
             client_id="test-client",
             client_secret="test-secret",
@@ -40,30 +28,157 @@ class TestOIDCConfig:
             redirect_url="http://localhost:8080/callback",
         )
 
-        assert config.issuer_url == "https://auth.example.com"
-        assert config.client_id == "test-client"
         assert config.client_secret == "test-secret"
         assert config.scopes == "openid profile email"
         assert config.redirect_url == "http://localhost:8080/callback"
 
     def test_equality(self):
-        """Test that two OIDCConfig instances with same values are equal."""
-        config1 = OIDCConfig(
-            issuer_url="https://auth.example.com", client_id="test-client"
-        )
-        config2 = OIDCConfig(
-            issuer_url="https://auth.example.com", client_id="test-client"
-        )
-
-        assert config1 == config2
+        a = DesktopConfig(issuer_url="https://x", client_id="c")
+        b = DesktopConfig(issuer_url="https://x", client_id="c")
+        assert a == b
 
     def test_inequality(self):
-        """Test that two OIDCConfig instances with different values are not equal."""
-        config1 = OIDCConfig(
-            issuer_url="https://auth.example.com", client_id="test-client"
-        )
-        config2 = OIDCConfig(
-            issuer_url="https://other.example.com", client_id="test-client"
-        )
+        a = DesktopConfig(issuer_url="https://x", client_id="c")
+        b = DesktopConfig(issuer_url="https://y", client_id="c")
+        assert a != b
 
-        assert config1 != config2
+
+class TestWebConfigInbound:
+    """Per-provider inbound validation in WebConfig.__post_init__."""
+
+    def test_keycloak_requires_issuer_url(self):
+        with pytest.raises(ValueError, match="keycloak.*issuer_url"):
+            WebConfig(
+                inbound_auth_provider="keycloak",
+                proxy_base_url="https://mcp.example.com",
+            )
+
+    def test_keycloak_does_not_require_client_id(self):
+        # RemoteAuthProvider mode: no client credentials needed on the proxy.
+        config = WebConfig(
+            inbound_auth_provider="keycloak",
+            proxy_base_url="https://mcp.example.com",
+            issuer_url="https://kc.example.com/realms/r",
+        )
+        assert config.client_id is None
+        assert config.client_secret is None
+
+    def test_oidc_requires_issuer_and_client_id(self):
+        with pytest.raises(ValueError, match="oidc.*issuer_url"):
+            WebConfig(
+                inbound_auth_provider="oidc", proxy_base_url="https://mcp.example.com"
+            )
+        with pytest.raises(ValueError, match="oidc.*client_id"):
+            WebConfig(
+                inbound_auth_provider="oidc",
+                proxy_base_url="https://mcp.example.com",
+                issuer_url="https://idp.example.com",
+            )
+
+    def test_aws_cognito_requires_full_set(self):
+        with pytest.raises(
+            ValueError,
+            match="aws-cognito.*client_id.*client_secret.*cognito_user_pool_id.*cognito_aws_region",
+        ):
+            WebConfig(
+                inbound_auth_provider="aws-cognito",
+                proxy_base_url="https://mcp.example.com",
+            )
+
+    def test_aws_cognito_happy_path(self):
+        config = WebConfig(
+            inbound_auth_provider="aws-cognito",
+            proxy_base_url="https://mcp.example.com",
+            client_id="cid",
+            client_secret="csec",
+            cognito_user_pool_id="eu-central-1_abc",
+            cognito_aws_region="eu-central-1",
+        )
+        assert config.cognito_user_pool_id == "eu-central-1_abc"
+
+    def test_google_requires_client_id(self):
+        with pytest.raises(ValueError, match="google.*client_id"):
+            WebConfig(
+                inbound_auth_provider="google", proxy_base_url="https://mcp.example.com"
+            )
+
+    def test_azure_requires_tenant_and_scopes(self):
+        with pytest.raises(ValueError, match="azure.*azure_tenant_id"):
+            WebConfig(
+                inbound_auth_provider="azure",
+                proxy_base_url="https://mcp.example.com",
+                client_id="cid",
+            )
+        with pytest.raises(ValueError, match="azure.*scopes"):
+            WebConfig(
+                inbound_auth_provider="azure",
+                proxy_base_url="https://mcp.example.com",
+                client_id="cid",
+                azure_tenant_id="tid",
+            )
+
+    def test_azure_happy_path(self):
+        config = WebConfig(
+            inbound_auth_provider="azure",
+            proxy_base_url="https://mcp.example.com",
+            client_id="cid",
+            azure_tenant_id="tid",
+            scopes="user.read",
+        )
+        assert config.azure_tenant_id == "tid"
+
+
+class TestWebConfigOutbound:
+    """Per-mode outbound validation in WebConfig.__post_init__."""
+
+    def _base_keycloak_kwargs(self) -> dict:
+        return {
+            "inbound_auth_provider": "keycloak",
+            "proxy_base_url": "https://mcp.example.com",
+            "issuer_url": "https://kc.example.com/realms/r",
+        }
+
+    def test_default_outbound_is_forward(self):
+        config = WebConfig(**self._base_keycloak_kwargs())
+        assert config.outbound_auth == "forward"
+
+    def test_oauth_client_credentials_requires_all_fields(self):
+        with pytest.raises(
+            ValueError,
+            match="oauth-client-credentials.*outbound_client_id.*outbound_client_secret.*outbound_token_url",
+        ):
+            WebConfig(
+                **self._base_keycloak_kwargs(),
+                outbound_auth="oauth-client-credentials",
+            )
+
+    def test_oauth_client_credentials_happy_path(self):
+        config = WebConfig(
+            **self._base_keycloak_kwargs(),
+            outbound_auth="oauth-client-credentials",
+            outbound_client_id="ocid",
+            outbound_client_secret="osec",
+            outbound_token_url="https://idp.example.com/token",
+        )
+        assert config.outbound_auth == "oauth-client-credentials"
+
+    def test_static_requires_header_value(self):
+        with pytest.raises(ValueError, match="static.*outbound_header_value"):
+            WebConfig(**self._base_keycloak_kwargs(), outbound_auth="static")
+
+    def test_static_happy_path_with_default_header_name(self):
+        config = WebConfig(
+            **self._base_keycloak_kwargs(),
+            outbound_auth="static",
+            outbound_header_value="Bearer abc123",
+        )
+        assert config.outbound_header_name == "Authorization"
+
+    def test_static_happy_path_with_custom_header_name(self):
+        config = WebConfig(
+            **self._base_keycloak_kwargs(),
+            outbound_auth="static",
+            outbound_header_name="X-API-Key",
+            outbound_header_value="abc123",
+        )
+        assert config.outbound_header_name == "X-API-Key"

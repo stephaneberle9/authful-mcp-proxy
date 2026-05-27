@@ -1,0 +1,41 @@
+# Docker build context exclusions.
+#
+# Note: `.git/` is intentionally NOT excluded — `uv-dynamic-versioning`
+# needs it during the builder stage to derive the project version from the
+# latest git tag. The final image does not include `.git/` (only the
+# builder stage copies it; the production stage takes the resolved venv).
+
+# Python build artifacts and caches
+__pycache__/
+*.py[oc]
+*.egg-info/
+build/
+dist/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Linter / type-checker caches
+.ruff_cache/
+.mypy_cache/
+.ty_cache/
+
+# Local virtualenvs
+.venv/
+
+# Local env files — runtime config comes from container env vars / k8s secrets
+.env
+.env.local
+
+# IDE / agent local state
+.vscode/
+.idea/
+.claude/
+
+# Local helper / debug scripts
+inspect-*.bat
+run-*.bat
+*.log
+*.mcpb

@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 from fastmcp import FastMCP
@@ -8,43 +9,52 @@ from fastmcp.server.dependencies import get_access_token
 logger = logging.getLogger(__name__)
 
 
-def validate_mcp_config(mcp_backend: FastMCP):
-    """Validate the MCP backend server's configuration."""
-    # Validate that the MCP backend server's auth provider is a JWTVerifier instance.
-    if mcp_backend.auth is None or not isinstance(mcp_backend.auth, JWTVerifier):
+def _build_jwt_verifier() -> JWTVerifier:
+    """Construct a JWTVerifier from JWT_* environment variables."""
+    issuer = os.environ.get("JWT_ISSUER")
+    jwks_uri = os.environ.get("JWT_JWKS_URI")
+    if not issuer or not jwks_uri:
         raise ValueError(
-            f"Auth provider used by this MCP server must be a '{JWTVerifier.__name__}' instance, got {type(mcp_backend.auth).__name__ if mcp_backend.auth else None}"
+            "JWT_ISSUER and JWT_JWKS_URI environment variables are required. "
+            "See .env.example for the full list."
         )
 
+    audience = os.environ.get("JWT_AUDIENCE") or None
+    scopes_csv = os.environ.get("JWT_REQUIRED_SCOPES", "").strip()
+    required_scopes = [s.strip() for s in scopes_csv.split(",") if s.strip()] or None
 
-def create_mcp_backend() -> FastMCP:
-    # FastMCP will automatically instantiate JWTVerifier based on FASTMCP_SERVER_AUTH env var
-    mcp_backend = FastMCP(name="Token-validating MCP Backend")
+    return JWTVerifier(
+        issuer=issuer,
+        jwks_uri=jwks_uri,
+        audience=audience,
+        required_scopes=required_scopes,
+    )
 
-    validate_mcp_config(mcp_backend)
 
-    @mcp_backend.tool
+def create_upstream_mcp() -> FastMCP:
+    upstream_mcp = FastMCP(
+        name="Token-validating Upstream MCP", auth=_build_jwt_verifier()
+    )
+
+    @upstream_mcp.tool
     async def get_access_token_claims() -> dict:
         """Get the authenticated user's access token claims."""
-        # Retrieve access token
         token = get_access_token()
         if not token:
             raise RuntimeError("Failed to retrieve access token")
-
-        # Extract and return access token claims
         return {
             "sub": token.claims.get("sub"),
             "username": token.claims.get("username"),
             "cognito:groups": token.claims.get("cognito:groups", []),
         }
 
-    return mcp_backend
+    return upstream_mcp
 
 
 def main():
     try:
-        mcp_backend = create_mcp_backend()
-        mcp_backend.run(transport="http", port=8090, log_level="DEBUG")
+        upstream_mcp = create_upstream_mcp()
+        upstream_mcp.run(transport="http", port=8090, log_level="DEBUG")
     except KeyboardInterrupt:
         # Graceful shutdown, suppress noisy logs resulting from asyncio.run task cancellation propagation
         pass

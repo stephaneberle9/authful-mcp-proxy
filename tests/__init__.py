@@ -1,1 +1,1 @@
-"""Tests for authful-mcp-proxy."""
+"""Tests for authsome-mcp-proxy."""
