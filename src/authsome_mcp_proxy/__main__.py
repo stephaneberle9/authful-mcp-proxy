@@ -147,7 +147,13 @@ def cli() -> argparse.Namespace:
         help="Publicly reachable URL of the proxy -- required for http mode "
         "(can also be set via MCP_PROXY_BASE_URL env var). Used by inbound providers to "
         "advertise their authorization/token/JWKS endpoints to downstream MCP "
-        "clients via OAuth 2.0 protected-resource metadata.",
+        "clients via OAuth 2.0 protected-resource metadata. Accepts a "
+        "comma-separated list to serve several public hostnames from one "
+        "process, each as its own OAuth identity, dispatched on the request's "
+        "Host header; the first entry is canonical and also answers requests "
+        "with no or an unrecognized Host (e.g. container health probes). Every "
+        "entry's '{base_url}/auth/callback' must be registered as a redirect "
+        "URI with the IdP.",
     )
     parser.add_argument(
         "--audience",
@@ -328,6 +334,25 @@ def _apply_env_fallbacks(args: argparse.Namespace) -> None:
         )
 
 
+def _split_base_urls(raw: str) -> list[str]:
+    """Split a comma-separated ``--proxy-base-url`` value into its entries.
+
+    Blank entries are dropped so a trailing comma, or the line continuations
+    that creep into Kubernetes manifests and .env files, don't produce an
+    identity with an empty hostname.
+
+    Raises:
+        ValueError: If nothing usable remains.
+    """
+    base_urls = [entry.strip() for entry in raw.split(",")]
+    base_urls = [entry for entry in base_urls if entry]
+    if not base_urls:
+        raise ValueError(
+            "--proxy-base-url (or MCP_PROXY_BASE_URL env var) contains no usable URL"
+        )
+    return base_urls
+
+
 def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
     """Build the appropriate ProxyConfig from parsed CLI args.
 
@@ -362,9 +387,12 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
             "--transport http"
         )
 
+    canonical_base_url, *additional_base_urls = _split_base_urls(args.proxy_base_url)
+
     return WebConfig(
         inbound_auth_provider=args.inbound_auth_provider,
-        proxy_base_url=args.proxy_base_url,
+        proxy_base_url=canonical_base_url,
+        additional_proxy_base_urls=additional_base_urls,
         client_id=args.oidc_client_id,
         client_secret=args.oidc_client_secret,
         scopes=args.oidc_scopes,

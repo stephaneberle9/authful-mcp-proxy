@@ -694,3 +694,87 @@ class TestGetLogLevelName:
 
         level = get_log_level_name(Args())
         assert level == logging.getLevelName(logging.INFO)
+
+
+class TestMultipleProxyBaseUrls:
+    """--proxy-base-url / MCP_PROXY_BASE_URL accept a comma-separated list so a
+    deployment can serve several public hostnames from one process."""
+
+    @staticmethod
+    def _config(base_urls) -> WebConfig:
+        config = build_proxy_config(
+            _parse(
+                [
+                    "http://upstream",
+                    "--transport",
+                    "http",
+                    "--proxy-base-url",
+                    base_urls,
+                    "--inbound-auth-provider",
+                    "keycloak",
+                    "--oidc-issuer-url",
+                    "https://kc/realms/r",
+                ]
+            )
+        )
+        # build_proxy_config returns the ProxyConfig union; --transport http
+        # always yields the web half.
+        assert isinstance(config, WebConfig)
+        return config
+
+    def test_single_url_leaves_no_additional_identities(self):
+        """The pre-existing single-hostname form must keep behaving exactly as
+        it did, since every current deployment passes it."""
+        config = self._config("https://mcp.example.com")
+        assert config.proxy_base_url == "https://mcp.example.com"
+        assert config.additional_proxy_base_urls == []
+
+    def test_first_entry_becomes_canonical_and_the_rest_additional(self):
+        config = self._config(
+            "https://mcp.example.io,https://mcp.example.com,https://mcp.example.de"
+        )
+        assert config.proxy_base_url == "https://mcp.example.io"
+        assert config.additional_proxy_base_urls == [
+            "https://mcp.example.com",
+            "https://mcp.example.de",
+        ]
+
+    def test_surrounding_whitespace_and_trailing_commas_are_ignored(self):
+        """Kubernetes manifests and .env files routinely introduce both; an
+        empty entry would otherwise become an identity with no hostname."""
+        config = self._config(" https://mcp.example.io , https://mcp.example.com ,, ")
+        assert config.proxy_base_url == "https://mcp.example.io"
+        assert config.additional_proxy_base_urls == ["https://mcp.example.com"]
+
+    def test_only_separators_is_rejected(self):
+        with pytest.raises(ValueError, match="no usable URL"):
+            self._config(" , , ")
+
+    def test_reads_a_list_from_the_environment(self):
+        argv = [
+            "authsome-mcp-proxy",
+            "http://upstream",
+            "--transport",
+            "http",
+            "--inbound-auth-provider",
+            "keycloak",
+            "--oidc-issuer-url",
+            "https://kc/realms/r",
+        ]
+        with patch("sys.argv", argv):
+            with patch.dict(
+                os.environ,
+                {
+                    "MCP_PROXY_BASE_URL": "https://mcp.example.io,https://mcp.example.com"
+                },
+                clear=True,
+            ):
+                args = cli()
+        config = build_proxy_config(args)
+        assert isinstance(config, WebConfig)
+        assert config.proxy_base_url == "https://mcp.example.io"
+        assert config.additional_proxy_base_urls == ["https://mcp.example.com"]
+
+    def test_duplicate_hostnames_are_rejected(self):
+        with pytest.raises(ValueError, match="share the hostname"):
+            self._config("https://mcp.example.com,https://mcp.example.com/other")

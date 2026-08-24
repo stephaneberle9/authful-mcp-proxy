@@ -337,6 +337,44 @@ uvx authsome-mcp-proxy ... \
 Whichever fields you set are advertised to downstream clients; the rest
 fall back to FastMCP's auto-generated `FastMCPProxy-xxxx`.
 
+## Serving several hostnames from one deployment
+
+Sometimes the same proxy has to be reachable under more than one public
+hostname — an alias domain for customers whose networks block your
+primary TLD, a vanity host, or both names running side by side during a
+migration. Pass them as a comma-separated list:
+
+```bash
+uvx authsome-mcp-proxy ...   --proxy-base-url https://mcp.example.io,https://mcp.example.com
+```
+
+The first entry is **canonical**: it is the identity served to requests
+that arrive with no `Host` header or an unrecognized one, which is what
+container health probes addressing the pod IP do.
+
+Each hostname is served as a *fully separate OAuth identity* — its own
+protected-resource metadata, its own authorization-server metadata, its
+own `redirect_uri`. A client that reaches `mcp.example.com` is never
+handed `mcp.example.io` to continue its flow with, which is the entire
+point when the alias exists because the primary domain is unreachable.
+
+You will need to **register `{base_url}/auth/callback` for every entry**
+as an allowed redirect URI with your IdP. Two entries sharing a hostname
+(differing only in scheme, port or path) are rejected at startup, since
+the `Host` header cannot tell them apart.
+
+> [!NOTE]
+> This cannot be solved at the load balancer. Adding a second host to the
+> ingress fixes TLS and routing, but a FastMCP auth provider bakes its
+> `base_url` in at construction and advertises it everywhere, so the proxy
+> keeps answering discovery with the first hostname. Rewriting the
+> hostname in responses at the edge fails too: it survives the metadata
+> documents and the redirect, then breaks at the server-to-server token
+> exchange, where `redirect_uri` must byte-match what the IdP saw earlier.
+> The proxy therefore builds one app per hostname over one shared server
+> and dispatches on `Host` — a duplicated front door, not a duplicated
+> backend.
+
 # Local Stdio Proxy (Developer Use)
 
 The original mode — the proxy is launched as a subprocess by the MCP
@@ -595,7 +633,7 @@ All options can be set via CLI flags or matching environment variables
 | `MCP_PROXY_TRANSPORT` | `--transport {stdio,http}` | `stdio` | Which transport to serve on. |
 | `MCP_PROXY_HOST` | `--host` | `0.0.0.0` | HTTP-mode bind address. |
 | `MCP_PROXY_PORT` | `--port` | `8000` | HTTP-mode listen port. |
-| `MCP_PROXY_BASE_URL` | `--proxy-base-url` | _required for http_ | Publicly reachable URL of the proxy. Used to advertise auth metadata to downstream clients. |
+| `MCP_PROXY_BASE_URL` | `--proxy-base-url` | _required for http_ | Publicly reachable URL of the proxy. Used to advertise auth metadata to downstream clients. Accepts a comma-separated list to serve several hostnames, each as its own OAuth identity — see [Serving several hostnames from one deployment](#serving-several-hostnames-from-one-deployment). |
 | `MCP_PROXY_DEBUG` | `--debug` | _off_ | Enable debug logging. |
 
 **Server identity advertised to downstream clients** (http mode):
@@ -702,7 +740,14 @@ to the OAuth client's allowed redirect URIs at the IdP. For stdio mode
 that's `http://localhost:8080/auth/callback` (or whatever
 `OIDC_REDIRECT_URL` is set to); for web mode it's
 `{MCP_PROXY_BASE_URL}/auth/callback`. The match has to be exact, including
-trailing slashes.
+trailing slashes. When `MCP_PROXY_BASE_URL` lists several hostnames, *each*
+one needs its own callback registered — a hostname whose callback is missing
+fails only at the end of the flow, after the user has already logged in.
+
+**One hostname advertises another in its OAuth metadata** — the proxy is
+running with only that other hostname in `MCP_PROXY_BASE_URL`. Adding a host
+at the load balancer is not enough; see [Serving several hostnames from one
+deployment](#serving-several-hostnames-from-one-deployment).
 
 **Tokens won't refresh** — most IdPs require `offline_access` in the
 scope list to issue refresh tokens (`openid profile email

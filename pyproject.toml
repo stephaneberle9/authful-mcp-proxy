@@ -10,6 +10,16 @@ requires-python = ">=3.10"
 dependencies = [
     "fastmcp>=3.2.4",
     "py-key-value-aio[disk]>=0.3.0",
+    # Both arrive transitively via fastmcp, but web mode imports them directly --
+    # starlette for the ASGI types the host router is written against, uvicorn to
+    # serve the router itself. Declared so a future fastmcp that stops depending on
+    # them fails at resolution rather than at import. The floors match what the
+    # existing chain already guarantees (fastmcp -> uvicorn>=0.35,
+    # fastmcp -> mcp -> starlette>=0.27), so neither narrows resolution; the APIs
+    # used (starlette.types, starlette.middleware.Middleware, uvicorn.Config /
+    # Server) long predate both.
+    "starlette>=0.27",
+    "uvicorn>=0.35",
 ]
 
 [dependency-groups]

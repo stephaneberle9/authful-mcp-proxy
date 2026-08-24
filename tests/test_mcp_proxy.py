@@ -1,6 +1,9 @@
+from contextlib import asynccontextmanager, contextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from starlette.middleware import Middleware
 
 from authsome_mcp_proxy import mcp_proxy
 from authsome_mcp_proxy.config import DesktopConfig, WebConfig
@@ -138,9 +141,11 @@ async def test_run_async_desktop_uses_fresh_proxy_client():
 
 
 @pytest.mark.asyncio
-async def test_run_async_web_wires_inbound_and_outbound_auth():
-    """Web mode skips the info-relay step, plugs inbound auth into create_proxy
-    via auth=, and attaches outbound auth to the per-session Client."""
+async def test_run_async_web_wires_outbound_auth_and_defers_serving():
+    """Web mode skips the info-relay step and attaches outbound auth to the
+    per-session Client. Inbound auth is deliberately *not* passed to
+    create_proxy: it is per-hostname and built inside _serve_http, so the
+    shared server must not carry one identity of its own."""
     upstream_url = "http://upstream:8080"
     web_config = WebConfig(
         inbound_auth_provider="keycloak",
@@ -148,20 +153,18 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
         issuer_url="https://kc.example.com/realms/r",
     )
 
-    sentinel_inbound = MagicMock(name="inbound_auth")
     sentinel_outbound = MagicMock(name="outbound_auth")
 
     with (
-        patch(
-            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth",
-            return_value=sentinel_inbound,
-        ) as mock_build_inbound,
         patch(
             "authsome_mcp_proxy.mcp_proxy.build_outbound_auth",
             return_value=sentinel_outbound,
         ) as mock_build_outbound,
         patch("authsome_mcp_proxy.mcp_proxy.Client") as mock_client_cls,
         patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch(
+            "authsome_mcp_proxy.mcp_proxy._serve_http", new_callable=AsyncMock
+        ) as mock_serve,
     ):
         proxy_client = AsyncMock()
         mock_client_cls.return_value = proxy_client
@@ -171,8 +174,6 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
 
         await mcp_proxy.run_async(upstream_url, web_config, show_banner=False)
 
-        # Inbound + outbound factories called exactly once each with the config.
-        mock_build_inbound.assert_called_once_with(web_config)
         mock_build_outbound.assert_called_once_with(web_config)
 
         # The (single) Client was built with auth=outbound_auth (no info-relay
@@ -181,11 +182,11 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
         client_kwargs = mock_client_cls.call_args.kwargs
         assert client_kwargs["auth"] is sentinel_outbound
 
-        # create_proxy received that client + auth=inbound_auth.
+        # create_proxy received that client and no inbound auth.
         mock_create_proxy.assert_called_once()
         cp_args = mock_create_proxy.call_args
         assert cp_args.args[0] is proxy_client
-        assert cp_args.kwargs["auth"] is sentinel_inbound
+        assert "auth" not in cp_args.kwargs
         # No server-identity kwargs leak through when none were configured;
         # FastMCP's defaults apply.
         assert "name" not in cp_args.kwargs
@@ -193,10 +194,7 @@ async def test_run_async_web_wires_inbound_and_outbound_auth():
         assert "instructions" not in cp_args.kwargs
         assert "website_url" not in cp_args.kwargs
 
-        # Transport is forced to http in web mode.
-        mock_proxy_server.run_async.assert_called_once_with(
-            transport="http", show_banner=False
-        )
+        mock_serve.assert_called_once_with(mock_proxy_server, web_config, False)
 
 
 @pytest.mark.asyncio
@@ -216,13 +214,11 @@ async def test_run_async_web_forwards_server_identity_kwargs():
 
     with (
         patch(
-            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
-        ),
-        patch(
             "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
         patch("authsome_mcp_proxy.mcp_proxy.Client"),
         patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy._serve_http", new_callable=AsyncMock),
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
@@ -248,13 +244,11 @@ async def test_run_async_web_omits_unset_server_identity_kwargs():
 
     with (
         patch(
-            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
-        ),
-        patch(
             "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
         patch("authsome_mcp_proxy.mcp_proxy.Client"),
         patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch("authsome_mcp_proxy.mcp_proxy._serve_http", new_callable=AsyncMock),
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
@@ -270,7 +264,7 @@ async def test_run_async_web_omits_unset_server_identity_kwargs():
 
 @pytest.mark.asyncio
 async def test_run_async_web_forwards_transport_kwargs():
-    """host/port/log_level transport_kwargs are forwarded verbatim to FastMCP."""
+    """host/port/log_level transport_kwargs reach the serving layer verbatim."""
     upstream_url = "http://upstream:8080"
     web_config = WebConfig(
         inbound_auth_provider="keycloak",
@@ -280,13 +274,13 @@ async def test_run_async_web_forwards_transport_kwargs():
 
     with (
         patch(
-            "authsome_mcp_proxy.mcp_proxy.build_inbound_auth", return_value=MagicMock()
-        ),
-        patch(
             "authsome_mcp_proxy.mcp_proxy.build_outbound_auth", return_value=MagicMock()
         ),
         patch("authsome_mcp_proxy.mcp_proxy.Client"),
         patch("authsome_mcp_proxy.mcp_proxy.create_proxy") as mock_create_proxy,
+        patch(
+            "authsome_mcp_proxy.mcp_proxy._serve_http", new_callable=AsyncMock
+        ) as mock_serve,
     ):
         mock_proxy_server = AsyncMock()
         mock_create_proxy.return_value = mock_proxy_server
@@ -300,9 +294,10 @@ async def test_run_async_web_forwards_transport_kwargs():
             log_level="DEBUG",
         )
 
-        mock_proxy_server.run_async.assert_called_once_with(
-            transport="http",
-            show_banner=False,
+        mock_serve.assert_called_once_with(
+            mock_proxy_server,
+            web_config,
+            False,
             host="0.0.0.0",
             port=8000,
             log_level="DEBUG",
@@ -327,3 +322,315 @@ async def test_run_async_rejects_unknown_config_type():
             NotAConfig(),  # ty: ignore[invalid-argument-type]
             show_banner=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# Multi-hostname serving
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def _noop_lifespan():
+    yield
+
+
+def _fake_server():
+    """A stand-in FastMCP server whose reference-counted lifespan is a no-op."""
+    server = MagicMock(name="mcp_proxy")
+    server._lifespan_manager.side_effect = lambda: _noop_lifespan()
+    return server
+
+
+@contextmanager
+def _serve_patches():
+    """Patch the serving layer's collaborators: app factory, auth factory,
+    host router and uvicorn. Yields them as a SimpleNamespace."""
+    with (
+        patch("authsome_mcp_proxy.mcp_proxy.create_streamable_http_app") as create_app,
+        patch("authsome_mcp_proxy.mcp_proxy.build_inbound_auth") as build_inbound,
+        patch("authsome_mcp_proxy.mcp_proxy.HostRouter") as host_router,
+        patch("authsome_mcp_proxy.mcp_proxy.uvicorn") as uvicorn_mod,
+    ):
+        uvicorn_mod.Server.return_value.serve = AsyncMock()
+        yield SimpleNamespace(
+            create_app=create_app,
+            build_inbound=build_inbound,
+            host_router=host_router,
+            uvicorn=uvicorn_mod,
+        )
+
+
+@pytest.mark.asyncio
+async def test_serve_http_builds_one_identity_per_base_url():
+    """Each configured hostname gets its own auth provider bound to its own base
+    URL -- that is the whole reason a second hostname needs more than an extra
+    ingress rule."""
+    web_config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.io",
+        additional_proxy_base_urls=["https://mcp.example.com"],
+        issuer_url="https://kc.example.com/realms/r",
+    )
+    app_io, app_com = MagicMock(name="app_io"), MagicMock(name="app_com")
+    auth_io, auth_com = MagicMock(name="auth_io"), MagicMock(name="auth_com")
+
+    with _serve_patches() as mocks:
+        mocks.create_app.side_effect = [app_io, app_com]
+        mocks.build_inbound.side_effect = [auth_io, auth_com]
+
+        await mcp_proxy._serve_http(_fake_server(), web_config, show_banner=False)
+
+        assert [c.kwargs["base_url"] for c in mocks.build_inbound.call_args_list] == [
+            "https://mcp.example.io",
+            "https://mcp.example.com",
+        ]
+        assert [c.kwargs["auth"] for c in mocks.create_app.call_args_list] == [
+            auth_io,
+            auth_com,
+        ]
+
+        # Routing table is keyed by base URL, canonical first.
+        router_args = mocks.host_router.call_args
+        assert router_args.args[0] == {
+            "https://mcp.example.io": app_io,
+            "https://mcp.example.com": app_com,
+        }
+        assert router_args.kwargs["canonical_base_url"] == "https://mcp.example.io"
+
+
+@pytest.mark.asyncio
+async def test_serve_http_shares_one_server_across_identities():
+    """The duplicated part is the front door only: every app is backed by the
+    same FastMCP server, so the upstream client and tool catalog are not
+    duplicated along with the identity."""
+    web_config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.io",
+        additional_proxy_base_urls=["https://mcp.example.com"],
+        issuer_url="https://kc.example.com/realms/r",
+    )
+    server = _fake_server()
+
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(server, web_config, show_banner=False)
+
+    assert mocks.create_app.call_count == 2
+    assert {id(c.kwargs["server"]) for c in mocks.create_app.call_args_list} == {
+        id(server)
+    }
+
+
+@pytest.mark.asyncio
+async def test_serve_http_single_host_builds_exactly_one_app():
+    """No additional base URLs means one app and one identity -- the previous
+    single-hostname behaviour, reached through the same code path."""
+    web_config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+    )
+
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(_fake_server(), web_config, show_banner=False)
+
+    assert mocks.create_app.call_count == 1
+    assert mocks.build_inbound.call_args.kwargs["base_url"] == "https://mcp.example.com"
+    assert list(mocks.host_router.call_args.args[0]) == ["https://mcp.example.com"]
+
+
+@pytest.mark.asyncio
+async def test_serve_http_passes_host_and_port_to_uvicorn():
+    web_config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+    )
+
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(
+            _fake_server(),
+            web_config,
+            show_banner=False,
+            host="0.0.0.0",
+            port=8000,
+        )
+
+    config_kwargs = mocks.uvicorn.Config.call_args.kwargs
+    assert config_kwargs["host"] == "0.0.0.0"
+    assert config_kwargs["port"] == 8000
+    assert mocks.uvicorn.Config.call_args.args[0] is mocks.host_router.return_value
+    mocks.uvicorn.Server.return_value.serve.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# The transport_kwargs passthrough contract
+# ---------------------------------------------------------------------------
+
+
+class _NoopMiddleware:
+    """Minimal ASGI middleware, used only as an identity sentinel."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        await self.app(scope, receive, send)
+
+
+SENTINEL_MIDDLEWARE = [Middleware(_NoopMiddleware)]
+
+
+def _web_config(**overrides):
+    return WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+        **overrides,
+    )
+
+
+@pytest.mark.asyncio
+async def test_serve_http_honours_the_full_fastmcp_keyword_surface():
+    """These reached FastMCP's run_http_async before the host router existed;
+    dropping them would have quietly ignored an operator's explicit setting."""
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(
+            _fake_server(),
+            _web_config(),
+            False,
+            path="/custom",
+            json_response=True,
+            stateless_http=True,
+            middleware=SENTINEL_MIDDLEWARE,
+        )
+
+    kwargs = mocks.create_app.call_args.kwargs
+    assert kwargs["streamable_http_path"] == "/custom"
+    assert kwargs["json_response"] is True
+    assert kwargs["stateless_http"] is True
+    assert kwargs["middleware"] is SENTINEL_MIDDLEWARE
+
+
+@pytest.mark.asyncio
+async def test_stateless_is_an_alias_for_stateless_http():
+    """FastMCP's CLI spells it `stateless`; accept both rather than silently
+    ignoring one of them."""
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(
+            _fake_server(), _web_config(), False, stateless=True
+        )
+
+    assert mocks.create_app.call_args.kwargs["stateless_http"] is True
+
+
+@pytest.mark.asyncio
+async def test_explicit_stateless_http_wins_over_the_alias():
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(
+            _fake_server(), _web_config(), False, stateless=True, stateless_http=False
+        )
+
+    assert mocks.create_app.call_args.kwargs["stateless_http"] is False
+
+
+@pytest.mark.asyncio
+async def test_uvicorn_config_merges_over_the_defaults():
+    with _serve_patches() as mocks:
+        await mcp_proxy._serve_http(
+            _fake_server(),
+            _web_config(),
+            False,
+            uvicorn_config={"timeout_graceful_shutdown": 30, "proxy_headers": True},
+        )
+
+    kwargs = mocks.uvicorn.Config.call_args.kwargs
+    assert kwargs["timeout_graceful_shutdown"] == 30
+    assert kwargs["proxy_headers"] is True
+    assert kwargs["lifespan"] == "on"
+
+
+@pytest.mark.asyncio
+async def test_unknown_transport_kwarg_fails_at_startup():
+    """An unrecognized keyword must not be swallowed: it would look like the
+    setting took effect while the server ran with the default."""
+    with _serve_patches():
+        with pytest.raises(TypeError, match="not_a_real_option"):
+            await mcp_proxy._serve_http(
+                _fake_server(),
+                _web_config(),
+                False,
+                not_a_real_option=True,  # ty: ignore[unknown-argument]
+            )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param(
+            WebConfig(
+                inbound_auth_provider="keycloak",
+                proxy_base_url="https://mcp.example.com",
+                issuer_url="https://kc.example.com/realms/r",
+            ),
+            id="web",
+        ),
+        pytest.param(
+            DesktopConfig(
+                issuer_url="https://auth.example.com", client_id="test-client"
+            ),
+            id="desktop",
+        ),
+    ],
+)
+async def test_transport_kwarg_is_rejected_in_both_modes(config):
+    """The transport follows from the config type, so there is nothing to choose
+    in either mode. Both branches splat transport_kwargs onto a call that already
+    fixes the transport, so without this guard the caller gets "got multiple
+    values for keyword argument 'transport'" naming a FastMCP function they never
+    called."""
+    with pytest.raises(ValueError, match="transport is not configurable"):
+        await mcp_proxy.run_async(
+            "http://upstream:8080", config, show_banner=False, transport="sse"
+        )
+
+
+@pytest.mark.asyncio
+async def test_transport_is_rejected_before_any_connection_is_attempted():
+    """Desktop mode dials the upstream to relay its serverInfo before it would
+    ever reach the transport. The guard has to run first, or a plainly invalid
+    call blocks on a network round trip before failing."""
+    desktop_config = DesktopConfig(
+        issuer_url="https://auth.example.com", client_id="test-client"
+    )
+
+    with (
+        patch("authsome_mcp_proxy.mcp_proxy.ExternalOIDCAuth") as mock_auth,
+        patch("authsome_mcp_proxy.mcp_proxy.Client") as mock_client_cls,
+    ):
+        with pytest.raises(ValueError, match="transport is not configurable"):
+            await mcp_proxy.run_async(
+                "http://upstream:8080",
+                desktop_config,
+                show_banner=False,
+                transport="http",
+            )
+
+    mock_auth.assert_not_called()
+    mock_client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["mcp_proxy", "config"])
+async def test_serve_http_internals_cannot_be_shadowed_by_transport_kwargs(name):
+    """mcp_proxy and config are positional-only, so a caller's **transport_kwargs
+    can neither rebind them nor collide with them. Without the marker this would
+    raise the far more puzzling "got multiple values for argument"."""
+    with _serve_patches():
+        with pytest.raises(TypeError, match="positional-only"):
+            await mcp_proxy._serve_http(
+                _fake_server(),
+                _web_config(),
+                False,
+                **{name: "hijacked"},  # ty: ignore[invalid-argument-type]
+            )

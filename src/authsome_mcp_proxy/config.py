@@ -24,7 +24,7 @@ B.2 is determined by the scope of the configured credential, not by which
 mechanism is used).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
 AuthProvider: TypeAlias = Literal["oidc", "keycloak", "aws-cognito", "google", "azure"]
@@ -89,7 +89,22 @@ class WebConfig:
         proxy_base_url: Publicly reachable URL of the proxy (e.g.
             ``https://mcp.example.com``). Used by every provider to advertise
             its authorization/token/JWKS endpoints to downstream MCP clients
-            via the OAuth 2.0 protected-resource metadata document.
+            via the OAuth 2.0 protected-resource metadata document. This is the
+            canonical identity: it also answers requests that carry no ``Host``
+            header or an unrecognized one, such as Kubernetes probes hitting
+            the pod IP.
+        additional_proxy_base_urls: Further public URLs the same proxy answers
+            under, each as its own OAuth identity. A provider's ``base_url``
+            reaches into the advertised resource, the authorization-server
+            metadata, the IdP ``redirect_uri`` and the minted tokens' ``iss``/
+            ``aud``, and FastMCP never derives it from the request -- so a
+            second hostname needs a second provider, not merely a second entry
+            on the load balancer. One app is built per base URL and requests
+            are dispatched between them on the ``Host`` header (see
+            :mod:`authsome_mcp_proxy.host_router`). Every entry's
+            ``{base_url}/auth/callback`` must be registered as a redirect URI
+            with the IdP. Empty by default -- single-hostname deployments are
+            unaffected.
         client_id: OAuth client ID. Required for ``oidc``, ``aws-cognito``,
             ``google``, ``azure``. Unused for ``keycloak`` (DCR-direct).
         client_secret: OAuth client secret. Required for ``aws-cognito``;
@@ -148,6 +163,7 @@ class WebConfig:
 
     inbound_auth_provider: AuthProvider
     proxy_base_url: str
+    additional_proxy_base_urls: list[str] = field(default_factory=list)
     client_id: str | None = None
     client_secret: str | None = None
     scopes: str | None = None
@@ -179,8 +195,34 @@ class WebConfig:
     proxy_website_url: str | None = None
 
     def __post_init__(self) -> None:
+        self._validate_base_urls()
         self._validate_inbound()
         self._validate_outbound()
+
+    @property
+    def all_proxy_base_urls(self) -> list[str]:
+        """Every public base URL this proxy answers under, canonical first."""
+        return [self.proxy_base_url, *self.additional_proxy_base_urls]
+
+    def _validate_base_urls(self) -> None:
+        """Reject base URL sets the ``Host`` header could not tell apart.
+
+        Duplicate hostnames are caught here rather than at startup so the
+        failure names the config that caused it. ``host_of`` also rejects a
+        value that isn't a URL at all (e.g. a bare hostname), which would
+        otherwise surface much later as an unroutable identity.
+        """
+        from .host_router import host_of
+
+        seen: dict[str, str] = {}
+        for base_url in self.all_proxy_base_urls:
+            host = host_of(base_url)
+            if host in seen:
+                raise ValueError(
+                    f"base URLs {seen[host]!r} and {base_url!r} share the hostname "
+                    f"{host!r}; the Host header cannot distinguish them"
+                )
+            seen[host] = base_url
 
     def _validate_inbound(self) -> None:
         if self.inbound_auth_provider == "keycloak":

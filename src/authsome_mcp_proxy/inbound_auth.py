@@ -49,7 +49,9 @@ def _parse_scopes(scopes: str | None) -> list[str] | None:
     return scopes.split()
 
 
-def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
+def build_inbound_auth(
+    config: WebConfig, base_url: str | None = None
+) -> FastMCPAuthProvider:
     """Instantiate the FastMCP auth provider matching ``config.inbound_auth_provider``.
 
     The returned provider is passed to FastMCP via the ``auth=`` argument
@@ -63,6 +65,12 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
         config: Web-mode configuration. ``WebConfig.__post_init__`` has
             already validated that all required per-provider fields are
             populated.
+        base_url: Which of the configured public base URLs this provider
+            should advertise as. Defaults to ``config.proxy_base_url``.
+            Multi-hostname deployments call this once per entry in
+            ``config.all_proxy_base_urls``, because a provider's base URL is
+            baked in at construction and reaches everything the provider
+            advertises -- see :mod:`authsome_mcp_proxy.host_router`.
 
     Returns:
         A FastMCP ``AuthProvider`` subclass instance.
@@ -71,13 +79,14 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
         ValueError: If ``config.inbound_auth_provider`` is unknown.
     """
     scopes = _parse_scopes(config.scopes)
+    base_url = base_url if base_url is not None else config.proxy_base_url
 
     if config.inbound_auth_provider == "keycloak":
         # RemoteAuthProvider: no client_id/secret; MCP client DCRs with Keycloak.
         assert config.issuer_url is not None
         return KeycloakAuthProvider(
             realm_url=config.issuer_url,
-            base_url=config.proxy_base_url,
+            base_url=base_url,
             required_scopes=scopes,
             audience=config.audience,
         )
@@ -94,7 +103,7 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             client_secret=config.client_secret,
             audience=config.audience,
             required_scopes=scopes,
-            base_url=config.proxy_base_url,
+            base_url=base_url,
         )
 
     if config.inbound_auth_provider == "aws-cognito":
@@ -108,7 +117,7 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             client_id=config.client_id,
             client_secret=config.client_secret,
             required_scopes=scopes,
-            base_url=config.proxy_base_url,
+            base_url=base_url,
         )
 
     if config.inbound_auth_provider == "google":
@@ -117,7 +126,7 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             client_id=config.client_id,
             client_secret=config.client_secret,
             required_scopes=scopes,
-            base_url=config.proxy_base_url,
+            base_url=base_url,
         )
 
     if config.inbound_auth_provider == "azure":
@@ -130,7 +139,7 @@ def build_inbound_auth(config: WebConfig) -> FastMCPAuthProvider:
             tenant_id=config.azure_tenant_id,
             identifier_uri=config.azure_identifier_uri,
             required_scopes=scopes,
-            base_url=config.proxy_base_url,
+            base_url=base_url,
         )
 
     raise ValueError(

@@ -182,3 +182,58 @@ class TestWebConfigOutbound:
             outbound_header_value="abc123",
         )
         assert config.outbound_header_name == "X-API-Key"
+
+
+# ---------------------------------------------------------------------------
+# Multiple public base URLs
+# ---------------------------------------------------------------------------
+
+
+def test_all_proxy_base_urls_puts_canonical_first():
+    """Order is load-bearing: the first entry is the identity that answers
+    requests with no or an unrecognized Host."""
+    config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.io",
+        additional_proxy_base_urls=[
+            "https://mcp.example.com",
+            "https://mcp.example.de",
+        ],
+        issuer_url="https://kc.example.com/realms/r",
+    )
+    assert config.all_proxy_base_urls == [
+        "https://mcp.example.io",
+        "https://mcp.example.com",
+        "https://mcp.example.de",
+    ]
+
+
+def test_all_proxy_base_urls_defaults_to_the_canonical_alone():
+    config = WebConfig(
+        inbound_auth_provider="keycloak",
+        proxy_base_url="https://mcp.example.com",
+        issuer_url="https://kc.example.com/realms/r",
+    )
+    assert config.all_proxy_base_urls == ["https://mcp.example.com"]
+
+
+def test_rejects_additional_base_url_duplicating_the_canonical_hostname():
+    """Scheme or port differences don't make two identities distinguishable --
+    the Host header carries neither."""
+    with pytest.raises(ValueError, match="share the hostname"):
+        WebConfig(
+            inbound_auth_provider="keycloak",
+            proxy_base_url="https://mcp.example.com",
+            additional_proxy_base_urls=["http://mcp.example.com:8000"],
+            issuer_url="https://kc.example.com/realms/r",
+        )
+
+
+def test_rejects_base_url_without_a_hostname():
+    with pytest.raises(ValueError, match="no hostname"):
+        WebConfig(
+            inbound_auth_provider="keycloak",
+            proxy_base_url="https://mcp.example.com",
+            additional_proxy_base_urls=["mcp.example.com"],
+            issuer_url="https://kc.example.com/realms/r",
+        )
