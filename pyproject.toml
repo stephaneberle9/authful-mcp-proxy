@@ -20,11 +20,23 @@ dependencies = [
     # Server) long predate both.
     "starlette>=0.27",
     "uvicorn>=0.35",
+    # Likewise transitive-but-imported-directly. Floors match what the chain
+    # already enforces (fastmcp -> httpx>=0.28.1, exceptiongroup>=1.2.2,
+    # mcp>=1.24.0, pydantic>=2.11.7; mcp -> anyio>=4.9), so none of these
+    # narrows resolution. Upper bounds are deliberately omitted: fastmcp
+    # already caps httpx and mcp, and duplicating a cap here would only get
+    # in the way when it lifts its own.
+    "anyio>=4.9",
+    "exceptiongroup>=1.2.2",
+    "httpx>=0.28.1",
+    "mcp>=1.24.0",
+    "pydantic>=2.11.7",
 ]
 
 [dependency-groups]
 dev = [
     "ty",
+    "deptry>=0.20",
     "pre-commit>=4.3.0",
     "ruff",
 ]
@@ -71,11 +83,24 @@ exclude = [
 default-groups = ["dev", "test"]
 
 [tool.deptry]
+# These are regexes, not globs. "*.log" is an invalid regex ("repetition
+# operator missing expression") and made deptry panic before scanning
+# anything, which is why the tool was configured but never actually ran.
 exclude = [
-  "*.log",
-    ".venv/",
-    "scripts/"
+  '.*\.log',
+  # Anchored at ^, so a bare '\.venv' would miss the nested venvs under
+  # examples/ and leave deptry scanning thousands of site-packages files.
+  '.*\.venv',
+  # Standalone sample projects, each with its own pyproject and dependencies;
+  # judging them against this one's is meaningless.
+  'examples',
+  'scripts',
 ]
+
+[tool.deptry.package_module_name_map]
+# py-key-value-aio installs as `key_value`, which deptry cannot infer from the
+# distribution name.
+py-key-value-aio = ["key_value"]
 
 [tool.ruff.lint]
 extend-select = ["I", "UP"]

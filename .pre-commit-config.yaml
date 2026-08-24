@@ -33,6 +33,20 @@ repos:
         pass_filenames: false
         require_serial: true
 
+      # src/ only: tests legitimately import the dev/test groups and the package
+      # itself, which deptry would report as missing or misplaced. src/ is what
+      # actually ships, so that is where an undeclared import matters.
+      - id: deptry
+        name: deptry
+        entry: uv run deptry src
+        language: system
+        # No `types: [python]` here: pre-commit ANDs types with files, so it
+        # would filter pyproject.toml back out -- and a dependency being
+        # removed there without its import going away is the whole point.
+        files: ^src/.*\.py$|^pyproject\.toml$
+        pass_filenames: false
+        require_serial: true
+
   # - repo: https://github.com/pre-commit/pre-commit-hooks
   #   rev: v6.0.0
   #   hooks:
