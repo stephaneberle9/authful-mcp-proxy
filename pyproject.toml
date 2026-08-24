@@ -8,7 +8,17 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp>=3.2.4",
+    # 3.4.3 is the first release whose OAuthProxy advertises "none" (and
+    # private_key_jwt) in token_endpoint_auth_methods_supported once CIMD is on.
+    # That floor is load-bearing rather than cosmetic: Claude picks CIMD only when
+    # the authorization-server metadata carries both
+    # client_id_metadata_document_supported: true and "none" -- its CIMD client
+    # authenticates as a public client -- and silently falls back to DCR when
+    # either is missing. Below 3.4.3 the proxy therefore advertises CIMD that no
+    # Claude client will ever select. The value is still hardcoded without "none"
+    # a layer down, in the MCP SDK's build_metadata() (python-sdk#2260, fix
+    # unmerged in #2261); fastmcp patches over it, so the floor belongs here.
+    "fastmcp>=3.4.3",
     "py-key-value-aio[disk]>=0.3.0",
     # Both arrive transitively via fastmcp, but web mode imports them directly --
     # starlette for the ASGI types the host router is written against, uvicorn to

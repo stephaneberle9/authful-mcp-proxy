@@ -135,3 +135,27 @@ async def test_dcr_stays_available_either_way(enable_cimd):
     metadata = await _metadata(_app(enable_cimd=enable_cimd))
 
     assert metadata["registration_endpoint"] == f"{BASE_URL}/register"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("build_config", [_oidc_config, _cognito_config])
+async def test_cimd_advertises_public_client_token_auth(build_config):
+    """Advertising CIMD is not on its own enough to get a client to use it.
+
+    Claude selects CIMD only when the metadata *also* offers ``none`` in
+    ``token_endpoint_auth_methods_supported`` -- its CIMD client authenticates as
+    a public client -- and falls back to DCR when that is missing. FastMCP adds
+    ``none`` and ``private_key_jwt`` on the CIMD branch of ``get_routes()``,
+    which is what the ``fastmcp>=3.4.3`` floor in ``pyproject.toml`` buys: on
+    3.3.1 the proxy advertised CIMD that no Claude client would ever select.
+
+    Asserted over ASGI rather than against the floor, because the floor is the
+    means and this is the end. Only the positive is asserted: with CIMD off,
+    which methods a public-client proxy ought to advertise is upstream's call,
+    and fastmcp 4.0 narrows the set to ``none`` unconditionally.
+    """
+    metadata = await _metadata(
+        _app(enable_cimd=True, config=build_config(enable_cimd=True))
+    )
+
+    assert "none" in metadata["token_endpoint_auth_methods_supported"]
