@@ -331,6 +331,61 @@ class TestCLIWebModeFlags:
         assert args.azure_identifier_uri == "api://env"
         assert args.audience == "env-aud"
 
+    def test_enable_cimd_defaults_to_true(self):
+        """Nothing set anywhere: CIMD stays on, matching FastMCP's default."""
+        args = _parse(["http://upstream"])
+        assert args.enable_cimd is True
+
+    def test_enable_cimd_flags(self):
+        assert _parse(["http://upstream", "--enable-cimd"]).enable_cimd is True
+        assert _parse(["http://upstream", "--no-enable-cimd"]).enable_cimd is False
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("1", True),
+            ("true", True),
+            ("TRUE", True),
+            ("yes", True),
+            ("on", True),
+            ("0", False),
+            ("false", False),
+            ("False", False),
+            ("no", False),
+            ("off", False),
+            ("", True),
+        ],
+    )
+    def test_enable_cimd_env_var(self, raw, expected):
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
+            with patch.dict(os.environ, {"ENABLE_CIMD": raw}, clear=True):
+                args = cli()
+        assert args.enable_cimd is expected
+
+    def test_enable_cimd_flag_overrides_env_var(self):
+        """The tri-state default exists for exactly this: --no-enable-cimd has
+        to beat ENABLE_CIMD=true, and vice versa."""
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream", "--no-enable-cimd"]
+        ):
+            with patch.dict(os.environ, {"ENABLE_CIMD": "true"}, clear=True):
+                assert cli().enable_cimd is False
+
+        with patch(
+            "sys.argv", ["authsome-mcp-proxy", "http://upstream", "--enable-cimd"]
+        ):
+            with patch.dict(os.environ, {"ENABLE_CIMD": "false"}, clear=True):
+                assert cli().enable_cimd is True
+
+    @pytest.mark.parametrize("raw", ["enabled", "disabled", "y", "maybe"])
+    def test_enable_cimd_env_var_rejects_unrecognized_values(self, raw):
+        """Plausible-looking values and typos alike have to fail loudly --
+        resolving them to the default would silently ignore the operator."""
+        with patch("sys.argv", ["authsome-mcp-proxy", "http://upstream"]):
+            with patch.dict(os.environ, {"ENABLE_CIMD": raw}, clear=True):
+                with pytest.raises(ValueError, match="ENABLE_CIMD"):
+                    cli()
+
     def test_outbound_auth_flags(self):
         test_args = [
             "http://upstream",

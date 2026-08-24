@@ -19,6 +19,12 @@ Two patterns are dispatched here:
   the generic fallback for any OIDC IdP that doesn't support DCR natively
   (including older Keycloak).
 
+``WebConfig.enable_cimd`` rides along on the ``OIDCProxy`` branches: FastMCP's
+``OAuthProxy`` implements CIMD (Client ID Metadata Documents) itself, so the
+proxy only has to forward the switch. It is inert for ``keycloak`` -- there
+Keycloak is the authorization server, so whether a downstream client may
+identify itself by URL is Keycloak's decision, not this proxy's.
+
 To add a new IdP:
 
 1. Add a literal to ``AuthProvider`` in :mod:`authsome_mcp_proxy.config`.
@@ -30,6 +36,7 @@ To add a new IdP:
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 from fastmcp.server.auth.auth import AuthProvider as FastMCPAuthProvider
@@ -47,6 +54,32 @@ def _parse_scopes(scopes: str | None) -> list[str] | None:
     if not scopes:
         return None
     return scopes.split()
+
+
+def _disable_cimd(provider: FastMCPAuthProvider) -> None:
+    """Turn CIMD off on an already-constructed provider.
+
+    Every other ``OIDCProxy`` subclass takes an ``enable_cimd`` keyword and
+    forwards it; ``AWSCognitoProvider`` is the one that doesn't (still true in
+    fastmcp 3.4.7), so for Cognito the manager has to be dropped after
+    construction instead. ``OAuthProxy`` gates both CIMD client lookup and the
+    ``client_id_metadata_document_supported`` advertisement on
+    ``self._cimd_manager is not None``, and ``get_routes()`` runs later -- when
+    the ASGI app is built -- so clearing it here is enough.
+
+    Interim measure. Once a fastmcp release carries the passthrough (see the
+    upstream PR against ``PrefectHQ/fastmcp``), raise the floor in
+    ``pyproject.toml``, delete this helper, and pass ``enable_cimd=`` to
+    ``AWSCognitoProvider`` like the other three providers.
+    """
+    if not hasattr(provider, "_cimd_manager"):
+        raise RuntimeError(
+            f"Cannot disable CIMD on {type(provider).__name__}: fastmcp "
+            f"{version('fastmcp')} no longer exposes _cimd_manager. Pass "
+            "enable_cimd to the provider constructor instead and delete this "
+            "workaround."
+        )
+    provider._cimd_manager = None  # ty: ignore[invalid-assignment]
 
 
 def build_inbound_auth(
@@ -104,6 +137,7 @@ def build_inbound_auth(
             audience=config.audience,
             required_scopes=scopes,
             base_url=base_url,
+            enable_cimd=config.enable_cimd,
         )
 
     if config.inbound_auth_provider == "aws-cognito":
@@ -111,7 +145,7 @@ def build_inbound_auth(
         assert config.client_secret is not None
         assert config.cognito_user_pool_id is not None
         assert config.cognito_aws_region is not None
-        return AWSCognitoProvider(
+        provider = AWSCognitoProvider(
             user_pool_id=config.cognito_user_pool_id,
             aws_region=config.cognito_aws_region,
             client_id=config.client_id,
@@ -119,6 +153,11 @@ def build_inbound_auth(
             required_scopes=scopes,
             base_url=base_url,
         )
+        # No enable_cimd keyword on this one -- see _disable_cimd. Enabled is
+        # the inherited default, so only the off switch needs applying.
+        if not config.enable_cimd:
+            _disable_cimd(provider)
+        return provider
 
     if config.inbound_auth_provider == "google":
         assert config.client_id is not None
@@ -127,6 +166,7 @@ def build_inbound_auth(
             client_secret=config.client_secret,
             required_scopes=scopes,
             base_url=base_url,
+            enable_cimd=config.enable_cimd,
         )
 
     if config.inbound_auth_provider == "azure":
@@ -140,6 +180,7 @@ def build_inbound_auth(
             identifier_uri=config.azure_identifier_uri,
             required_scopes=scopes,
             base_url=base_url,
+            enable_cimd=config.enable_cimd,
         )
 
     raise ValueError(

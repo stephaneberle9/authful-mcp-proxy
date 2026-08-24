@@ -113,6 +113,19 @@ class WebConfig:
         scopes: Space-separated OAuth scopes for the inbound flow. Required
             for ``azure`` (FastMCP's ``AzureProvider`` requires
             ``required_scopes``).
+        enable_cimd: Accept OAuth Client ID Metadata Documents from downstream
+            MCP clients (``draft-ietf-oauth-client-id-metadata-document``,
+            adopted into MCP as SEP-991). A CIMD client uses an HTTPS URL as
+            its ``client_id``; the proxy fetches the client's metadata from
+            that URL instead of the client registering via DCR, which gives
+            the client one durable identity that also survives a proxy
+            restart. Purely additive: DCR stays enabled either way, so
+            existing clients are unaffected. Defaults to ``True``, matching
+            FastMCP's own default. Two caveats: the proxy must be able to
+            reach arbitrary client domains over HTTPS for the document fetch
+            (a restrictive egress policy breaks CIMD), and the setting is
+            inert for ``keycloak``, where Keycloak -- not the proxy -- is the
+            authorization server that would have to support CIMD.
         issuer_url: For ``oidc`` and ``keycloak``: the issuer URL of the
             IdP / Keycloak realm (e.g.
             ``https://keycloak.example.com/realms/myrealm``). For ``oidc``,
@@ -167,6 +180,7 @@ class WebConfig:
     client_id: str | None = None
     client_secret: str | None = None
     scopes: str | None = None
+    enable_cimd: bool = True
 
     # oidc / keycloak
     issuer_url: str | None = None

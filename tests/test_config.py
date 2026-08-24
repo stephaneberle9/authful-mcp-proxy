@@ -96,6 +96,37 @@ class TestWebConfigInbound:
         )
         assert config.cognito_user_pool_id == "eu-central-1_abc"
 
+    def test_cimd_defaults_to_enabled(self):
+        """Matches FastMCP's own enable_cimd default, so an operator who
+        configures nothing keeps accepting CIMD client IDs."""
+        config = WebConfig(
+            inbound_auth_provider="oidc",
+            proxy_base_url="https://mcp.example.com",
+            issuer_url="https://idp.example.com",
+            client_id="cid",
+        )
+        assert config.enable_cimd is True
+
+    def test_cimd_can_be_disabled_for_any_provider(self):
+        """No __post_init__ rule guards this: off is legal everywhere, even
+        where it is inert (keycloak)."""
+        keycloak = WebConfig(
+            inbound_auth_provider="keycloak",
+            proxy_base_url="https://mcp.example.com",
+            issuer_url="https://kc.example.com/realms/r",
+            enable_cimd=False,
+        )
+        oidc = WebConfig(
+            inbound_auth_provider="oidc",
+            proxy_base_url="https://mcp.example.com",
+            issuer_url="https://idp.example.com",
+            client_id="cid",
+            enable_cimd=False,
+        )
+
+        assert keycloak.enable_cimd is False
+        assert oidc.enable_cimd is False
+
     def test_google_requires_client_id(self):
         with pytest.raises(ValueError, match="google.*client_id"):
             WebConfig(

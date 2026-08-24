@@ -12,8 +12,8 @@ This module provides the CLI entry point for running the MCP proxy server. It:
 CLI flags fall back to matching environment variables (CLI arguments take
 precedence). For stdio mode the ``OIDC_*`` env vars apply; for http mode
 the inbound provider params (``OIDC_*``, ``COGNITO_*``, ``AZURE_*``,
-``--audience``, ``--proxy-base-url``) and the outbound mode params
-(``OUTBOUND_*``) apply.
+``--audience``, ``--proxy-base-url``, ``ENABLE_CIMD``) and the outbound mode
+params (``OUTBOUND_*``) apply.
 """
 
 import argparse
@@ -34,6 +34,31 @@ logger = logging.getLogger(__name__)
 
 _INBOUND_AUTH_PROVIDERS = ("oidc", "keycloak", "aws-cognito", "google", "azure")
 _OUTBOUND_AUTH_MODES = ("forward", "oauth-client-credentials", "static")
+
+_TRUTHY = ("1", "true", "yes", "on")
+_FALSY = ("0", "false", "no", "off")
+
+
+def _env_flag(name: str, *, default: bool) -> bool:
+    """Read a boolean environment variable, or ``default`` when it is unset.
+
+    Unlike the plain fallback table in :func:`_apply_env_fallbacks`, this can
+    tell "unset" from "set to false", which a flag defaulting to true needs.
+    An unrecognized value is an error rather than a silent default: a typo, or
+    a plausible-looking ``ENABLE_CIMD=enabled``, should not quietly resolve to
+    whichever state the operator was trying to leave.
+    """
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    value = raw.strip().lower()
+    if value in _TRUTHY:
+        return True
+    if value in _FALSY:
+        return False
+    raise ValueError(
+        f"{name} must be one of {', '.join((*_TRUTHY, *_FALSY))} -- got {raw!r}"
+    )
 
 
 def cli() -> argparse.Namespace:
@@ -186,6 +211,17 @@ def cli() -> argparse.Namespace:
         help="Azure Application ID URI used for scope prefixing -- optional for "
         "--inbound-auth-provider azure (can also be set via AZURE_IDENTIFIER_URI env var)",
     )
+    parser.add_argument(
+        "--enable-cimd",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Accept OAuth Client ID Metadata Documents (CIMD) from downstream "
+        "MCP clients, i.e. an HTTPS URL as client_id whose metadata the proxy "
+        "fetches, as an alternative to Dynamic Client Registration. Enabled by "
+        "default; --no-enable-cimd turns it off. Additive -- DCR keeps working "
+        "either way. Inert for --inbound-auth-provider keycloak, where Keycloak "
+        "is the authorization server. Can also be set via ENABLE_CIMD env var.",
+    )
 
     # Web-mode-only outbound options
     parser.add_argument(
@@ -326,12 +362,11 @@ def _apply_env_fallbacks(args: argparse.Namespace) -> None:
         port_env = os.getenv("MCP_PROXY_PORT")
         args.port = int(port_env) if port_env else None
     if not args.debug:
-        args.debug = os.getenv("MCP_PROXY_DEBUG", "").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
+        args.debug = os.getenv("MCP_PROXY_DEBUG", "").lower() in _TRUTHY
+    if args.enable_cimd is None:
+        # Tri-state on purpose: --no-enable-cimd has to beat ENABLE_CIMD=true,
+        # which it cannot if "off" and "unset" both look like False here.
+        args.enable_cimd = _env_flag("ENABLE_CIMD", default=True)
 
 
 def _split_base_urls(raw: str) -> list[str]:
@@ -396,6 +431,7 @@ def build_proxy_config(args: argparse.Namespace) -> ProxyConfig:
         client_id=args.oidc_client_id,
         client_secret=args.oidc_client_secret,
         scopes=args.oidc_scopes,
+        enable_cimd=args.enable_cimd,
         issuer_url=args.oidc_issuer_url,
         audience=args.audience,
         cognito_user_pool_id=args.cognito_user_pool_id,

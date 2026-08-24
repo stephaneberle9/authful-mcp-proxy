@@ -63,7 +63,7 @@ and the architecture only makes sense once you separate them:
 | Hat | Counterparty | Role | Credentials it holds |
 |---|---|---|---|
 | **OAuth 2.0 _client_** | Upstream IdP / Authorization Server (Cognito, Keycloak, Google, Azure, generic OIDC) | The proxy is a single, pre-registered confidential client of the upstream IdP. | Static `client_id` + `client_secret` for the upstream IdP, loaded from the proxy's env (`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`). |
-| **DCR-enabled OAuth 2.0 _Authorization Server_** | The MCP client (Claude.ai/Cowork, Inspector, `mcp-remote`, …) | The proxy exposes a full OAuth AS surface (`/register`, `/authorize`, `/token`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource/...`) with **Dynamic Client Registration** (RFC 7591). MCP clients self-register against it at runtime. | None per-MCP-client at registration time — each MCP client gets its own DCR-issued `client_id` (and `client_secret` if confidential). |
+| **OAuth 2.0 _Authorization Server_** | The MCP client (Claude.ai/Cowork, Inspector, `mcp-remote`, …) | The proxy exposes a full OAuth AS surface (`/register`, `/authorize`, `/token`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource/...`) with **Dynamic Client Registration** (RFC 7591) and **Client ID Metadata Documents** (CIMD, SEP-991). MCP clients either self-register at runtime or present an HTTPS URL as their `client_id`. | None per-MCP-client at registration time — a DCR client gets its own proxy-issued `client_id` (and `client_secret` if confidential); a CIMD client brings its own, and the proxy fetches its metadata from that URL. |
 
 **The only way in which the proxy diverges from a "normal" OAuth AS:**
 it does not mint its own access or refresh tokens. The tokens it hands
@@ -80,6 +80,16 @@ client registration. The proxy stands between the two and translates:
 each DCR'd MCP client gets its own identity at the proxy, while all
 DCR'd clients share the proxy's single pre-registered identity at the
 upstream IdP.
+
+CIMD changes only the left-hand side of that translation. A CIMD client
+skips `/register` entirely: it sends its metadata-document URL as
+`client_id`, the proxy fetches and caches that document (HTTPS only,
+public addresses only, no redirects, 5 KB cap — FastMCP's SSRF-hardened
+fetcher), and from there the flow is identical. The upstream side is
+untouched: CIMD clients share the same single pre-registered identity at
+the IdP that DCR clients do. It is on by default and switchable with
+`ENABLE_CIMD` / `--no-enable-cimd`; for `INBOUND_AUTH_PROVIDER=keycloak`
+it is inert, because there Keycloak — not the proxy — is the AS.
 
 ### The two flows stitched together
 
@@ -134,7 +144,7 @@ stitches together through the temporary `PROXY_CODE`.
 
 | # | Wire event | Server-side record (proxy's `${FASTMCP_HOME}/oauth-proxy/<key>/`, Fernet-encrypted) | Client-side record (location depends on the MCP client — see below) |
 |---|---|---|---|
-| 1 | MCP client → proxy: `POST /register` (DCR, RFC 7591) | **DCR client record** — `{dcr_client_id, dcr_client_secret, redirect_uris, scopes, …}`. The only thing the proxy needs to look up later to recognise this particular MCP client. Bridges DCR onto the proxy's single pre-registered upstream client. | **Client credentials** — the `dcr_client_id` (+ secret if confidential) the proxy just issued back. Reused on every future flow against this server. |
+| 1 | MCP client → proxy: `POST /register` (DCR, RFC 7591) — **skipped by CIMD clients**, which send their document URL as `client_id` and let the proxy fetch it in step 2a | **DCR client record** — `{dcr_client_id, dcr_client_secret, redirect_uris, scopes, …}`. The only thing the proxy needs to look up later to recognise this particular MCP client. Bridges DCR onto the proxy's single pre-registered upstream client. | **Client credentials** — the `dcr_client_id` (+ secret if confidential) the proxy just issued back. Reused on every future flow against this server. |
 | 2a | MCP client → proxy: `GET /authorize` | **Transaction state** — `{txn_id, state, code_challenge, redirect_uri, requested_scopes, dcr_client_id, …}`. Short-lived; consumed in step 3. | *(in-memory PKCE verifier only — not on disk)* |
 | 2b | proxy → upstream IdP: `GET /authorize` (via browser redirect) | *(no new persistent record — the transaction state from 2a is updated with the upstream-side `state` value)* | *(nothing — browser only)* |
 | 3a | upstream IdP → proxy: `GET /callback?code=UPSTREAM_CODE` (via browser redirect) | **Transient** — upstream auth code held in memory until 3b completes. | *(nothing — the browser is currently on the proxy's domain)* |
@@ -190,6 +200,13 @@ storage directory:
   server, and re-run the full flow (browser popup, user login, fresh
   DCR registration). Less-forgiving clients may need manual
   re-registration.
+
+**CIMD clients are the exception.** Their `client_id` is a URL the client
+hosts, not a record the proxy issued, so a restarted proxy simply
+re-fetches the document and recognises them again. Nothing to persist,
+no re-registration, no browser popup — the client's tokens keep working.
+For a deployment whose MCP clients all speak CIMD, the DCR continuity
+problem below disappears.
 
 Tokens themselves are *not* affected by a pod restart — they're plain
 upstream-IdP-issued JWTs, validated by the upstream's public JWKS, and

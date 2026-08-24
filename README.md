@@ -11,8 +11,9 @@ The proxy can run as:
 
 - **Web connector** (`--transport http`, **recommended for end users**) —
   a persistent HTTP server that any MCP client reaches by URL. Downstream
-  clients authenticate against the proxy via Dynamic Client Registration;
-  the proxy bridges to your IdP and forwards traffic upstream. A single
+  clients authenticate against the proxy via Dynamic Client Registration
+  or a Client ID Metadata Document; the proxy bridges to your IdP and
+  forwards traffic upstream. A single
   instance can serve many users simultaneously and lives behind a normal
   URL (`https://mcp.example.com/mcp`) — no per-user config files,
   subprocess launchers, or local Python toolchains. This is the default
@@ -157,7 +158,9 @@ Browser           MCP Client (Claude.ai/Code/Inspector)
 
 The proxy wears two OAuth 2.0 hats at the same time: it is an **OAuth 2.0
 client** against the upstream IdP / Authorization Server, and a
-**DCR-enabled OAuth 2.0 Authorization Server** for the MCP client. The
+**OAuth 2.0 Authorization Server** for the MCP client, which may identify
+itself either by Dynamic Client Registration or by
+[CIMD](#client-id-metadata-documents-cimd) URL. The
 only way it diverges from a stock AS is that it does not mint its own
 tokens — it forwards the upstream IdP's tokens through transparently,
 which is what makes `OUTBOUND_AUTH=forward` work end-to-end. For the full
@@ -316,6 +319,53 @@ the proxy). Then click *Connect*.
 > need a browser on the proxy machine — downstream MCP clients drive the
 > OAuth browser flow from wherever the user is sitting. Just expose the
 > proxy at a reachable URL and you're done.
+
+## Client ID Metadata Documents (CIMD)
+
+DCR isn't the only way a downstream client can identify itself. With
+[Client ID Metadata Documents][cimd-draft] (adopted into MCP as SEP-991)
+a client hosts a small JSON document at an HTTPS URL it controls, and
+that URL *is* its `client_id`. The proxy fetches the document on first
+use instead of handing out a freshly registered client.
+
+Two things follow from that. The client keeps one durable identity
+across every server it talks to, rather than a different `client_id` per
+proxy instance. And because the metadata lives at the client's own URL,
+the proxy can re-fetch it after a restart — where a DCR registration
+that lived only in the proxy's client store is simply gone.
+
+CIMD is **enabled by default** and is purely additive: DCR keeps working
+exactly as before, so nothing changes for clients that don't use CIMD.
+Turn it off with `--no-enable-cimd` (or `ENABLE_CIMD=false`).
+
+Support depends on the inbound provider, because it depends on who is
+acting as the authorization server:
+
+| `--inbound-auth-provider` | CIMD |
+|---|---|
+| `oidc`, `google`, `azure`, `aws-cognito` | ✅ the proxy is the authorization server, and handles CIMD itself |
+| `keycloak` | ⚠️ not the proxy's call — clients register directly with Keycloak, so CIMD works only if your Keycloak does. `ENABLE_CIMD` is inert here. |
+
+> [!IMPORTANT]
+> The proxy fetches the document from the client's own domain, so it
+> needs outbound HTTPS to the public internet. A deployment whose egress
+> is locked down to the IdP only will reject every CIMD client while DCR
+> keeps working — a confusing failure worth ruling out first. The fetch
+> is SSRF-hardened by FastMCP (HTTPS only, public IPs only, no
+> redirects, 5 KB cap), so it cannot be pointed at internal addresses.
+
+To try it, generate and check a document with FastMCP's CLI:
+
+```bash
+uvx fastmcp cimd create --name "My Client" -r "http://localhost:*/callback"
+# host the result at e.g. https://client.example.com/oauth/client.json
+uvx fastmcp cimd validate https://client.example.com/oauth/client.json
+```
+
+…then connect with that URL as the client id. A successful CIMD
+connection reaches `/authorize` with no `/register` call ahead of it.
+
+[cimd-draft]: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document
 
 ## Identity advertised to downstream clients
 
@@ -660,6 +710,7 @@ needs):
 | `COGNITO_AWS_REGION` | `--cognito-aws-region` | AWS region for the Cognito user pool. |
 | `AZURE_TENANT_ID` | `--azure-tenant-id` | Azure AD tenant ID. |
 | `AZURE_IDENTIFIER_URI` | `--azure-identifier-uri` | Azure Application ID URI used for scope prefixing. |
+| `ENABLE_CIMD` | `--enable-cimd` / `--no-enable-cimd` | Accept Client ID Metadata Documents from downstream clients. On by default — see [Client ID Metadata Documents (CIMD)](#client-id-metadata-documents-cimd). |
 
 **Outbound auth** (http mode — `forward` is the default and needs no
 extra fields):
