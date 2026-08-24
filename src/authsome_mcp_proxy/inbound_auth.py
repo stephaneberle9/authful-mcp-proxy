@@ -60,17 +60,19 @@ def _disable_cimd(provider: FastMCPAuthProvider) -> None:
     """Turn CIMD off on an already-constructed provider.
 
     Every other ``OIDCProxy`` subclass takes an ``enable_cimd`` keyword and
-    forwards it; ``AWSCognitoProvider`` is the one that doesn't (still true in
-    fastmcp 3.4.7), so for Cognito the manager has to be dropped after
+    forwards it; ``AWSCognitoProvider`` is the one that doesn't in any stable
+    release up to 3.4.7, so for Cognito the manager has to be dropped after
     construction instead. ``OAuthProxy`` gates both CIMD client lookup and the
     ``client_id_metadata_document_supported`` advertisement on
     ``self._cimd_manager is not None``, and ``get_routes()`` runs later -- when
     the ASGI app is built -- so clearing it here is enough.
 
-    Interim measure. Once a fastmcp release carries the passthrough (see the
-    upstream PR against ``PrefectHQ/fastmcp``), raise the floor in
-    ``pyproject.toml``, delete this helper, and pass ``enable_cimd=`` to
-    ``AWSCognitoProvider`` like the other three providers.
+    Interim measure with a known end date: upstream added the passthrough in
+    PrefectHQ/fastmcp#4719, which ships in 4.0 (present in 4.0.0b3, absent from
+    every 3.x). When this project's floor reaches a stable 4.0, delete this
+    helper and pass ``enable_cimd=`` to ``AWSCognitoProvider`` like the other
+    three providers. Until then it stays correct on both lines: 4.0 keeps
+    ``_cimd_manager`` where it is.
     """
     if not hasattr(provider, "_cimd_manager"):
         raise RuntimeError(

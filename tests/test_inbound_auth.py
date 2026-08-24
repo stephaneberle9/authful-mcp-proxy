@@ -151,9 +151,9 @@ class TestInboundAuthDispatch:
         )
 
     def test_cognito_does_not_receive_an_enable_cimd_kwarg(self):
-        """AWSCognitoProvider has no such keyword (checked through fastmcp
-        3.4.7). Passing one would be a TypeError at construction, so the CIMD
-        default has to be left alone here."""
+        """AWSCognitoProvider has no such keyword in any stable release up to
+        3.4.7 (upstream added it for 4.0). Passing one would be a TypeError at
+        construction, so the CIMD default has to be left alone here."""
         config = _cognito_config()
         with patch("authsome_mcp_proxy.inbound_auth.AWSCognitoProvider") as mock_class:
             build_inbound_auth(config)
